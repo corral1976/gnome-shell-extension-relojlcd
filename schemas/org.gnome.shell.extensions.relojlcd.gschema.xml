@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.relojlcd" path="/org/gnome/shell/extensions/relojlcd/">
+    <key name="font-size" type="d">
+      <default>1.8</default>
+      <summary>Font size multiplier</summary>
+      <description>Controls the size of the clock display relative to the base font size</description>
+    </key>
+    <key name="clock-color" type="s">
+      <choices>
+        <choice value="green"/>
+        <choice value="amber"/>
+        <choice value="gray"/>
+        <choice value="ruby"/>
+        <choice value="sapphire"/>
+        <choice value="white"/>
+        <choice value="violet"/>
+        <choice value="gold"/>
+        <choice value="custom"/>
+      </choices>
+      <default>'green'</default>
+      <summary>Clock color theme</summary>
+      <description>Choose the color theme for the clock display</description>
+    </key>
+    <key name="custom-color" type="s">
+      <default>'#00ff00'</default>
+      <summary>Custom color hex value</summary>
+      <description>Hex color code used when clock-color is set to custom</description>
+    </key>
+    <key name="glow-intensity" type="d">
+      <default>5.0</default>
+      <summary>Glow or shadow intensity</summary>
+      <description>Controls the glow effect for colored themes or shadow strength for retro LCD</description>
+    </key>
+    <key name="clock-format-24h" type="b">
+      <default>true</default>
+      <summary>24-hour time format</summary>
+      <description>Display time in 24-hour format instead of AM/PM</description>
+    </key>
+    <key name="show-seconds" type="b">
+      <default>true</default>
+      <summary>Show seconds</summary>
+      <description>Display seconds in the time display</description>
+    </key>
+    <key name="blink-dots" type="b">
+      <default>true</default>
+      <summary>Blinking separators</summary>
+      <description>Make the time separators blink for classic LCD effect</description>
+    </key>
+    <key name="panel-position" type="s">
+      <choices>
+        <choice value="left"/>
+        <choice value="center"/>
+        <choice value="right"/>
+      </choices>
+      <default>'right'</default>
+      <summary>Panel position</summary>
+      <description>Choose where the clock appears on the panel</description>
+    </key>
+    <key name="alarm-enabled" type="b">
+      <default>false</default>
+      <summary>Enable alarm</summary>
+      <description>Turn on the alarm functionality</description>
+    </key>
+    <key name="alarm-hour" type="i">
+      <default>8</default>
+      <summary>Alarm hour</summary>
+      <description>Hour for the alarm (0-23)</description>
+    </key>
+    <key name="alarm-minute" type="i">
+      <default>0</default>
+      <summary>Alarm minute</summary>
+      <description>Minute for the alarm (0-59)</description>
+    </key>
+    <key name="alarm-message" type="s">
+      <default>'Alarm'</default>
+      <summary>Alarm message</summary>
+      <description>Custom message displayed when alarm triggers</description>
+    </key>
+    <key name="show-date" type="b">
+      <default>false</default>
+      <summary>Show date</summary>
+      <description>Display current date below the time</description>
+    </key>
+    <key name="is-widget" type="b">
+      <default>false</default>
+      <summary>Desktop widget mode</summary>
+      <description>Show clock on desktop instead of the top bar</description>
+    </key>
+    <key name="widget-x" type="i">
+      <default>100</default>
+      <summary>Widget X position</summary>
+      <description>Horizontal position of the desktop widget</description>
+    </key>
+    <key name="widget-y" type="i">
+      <default>100</default>
+      <summary>Widget Y position</summary>
+      <description>Vertical position of the desktop widget</description>
+    </key>
+    <key name="flicker-enabled" type="b">
+      <default>false</default>
+      <summary>Flicker effect</summary>
+      <description>Add subtle random flicker for vintage LCD display feel</description>
+    </key>
+    <key name="font-style" type="s">
+      <choices>
+        <choice value="regular"/>
+        <choice value="italic"/>
+        <choice value="bold"/>
+        <choice value="italic-bold"/>
+      </choices>
+      <default>'regular'</default>
+      <summary>Font style</summary>
+      <description>Choose the font style (synthetic bold/italic by Pango)</description>
+    </key>
+  </schema>
+</schemalist>

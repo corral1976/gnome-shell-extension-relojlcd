@@ -1,0 +1,18 @@
+{
+  "description": "Vintage digital display with high-fidelity 7-segment font. Features Neon Green, Amber, and Retro Gray modes with integrated alarm.",
+  "donations": {
+    "kofi": "retrolcdclock"
+  },
+  "gettext-domain": "relojlcd",
+  "name": "Retro LCD 7-Segment Clock",
+  "settings-schema": "org.gnome.shell.extensions.relojlcd",
+  "shell-version": [
+    "45",
+    "46",
+    "47",
+    "48"
+  ],
+  "url": "https://gitlab.com/corral1976/gnome-shell-extension-relojlcd",
+  "uuid": "relojlcd@carlos",
+  "version": 59
+}
