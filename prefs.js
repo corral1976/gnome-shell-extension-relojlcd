@@ -82,6 +82,17 @@ function drawClockPreview(cr, width, height, colors, glowValue, isRetro) {
     cr.fill();
 }
 
+function parseAlarms(raw) {
+    let parsed;
+    try {
+        parsed = JSON.parse(raw);
+    } catch (e) {
+        parsed = [];
+    }
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(alarm => alarm && typeof alarm.id === 'string');
+}
+
 function fontNeedsUpdate(sourceFile, destFile) {
     try {
         const sourceInfo = sourceFile.query_info('standard::size,time::modified', Gio.FileQueryInfoFlags.NONE, null);
@@ -397,58 +408,188 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
         displayGroup.add(positionRow);
 
         const alarmGroup = new Adw.PreferencesGroup({
-            title: _('Alarm Configuration'),
-            description: _('Configure alarm time and notification settings')
+            title: _('Alarms'),
+            description: _('Add one or more alarms; each one can be snoozed independently')
         });
         page.add(alarmGroup);
 
-        const alarmEnabledRow = new Adw.ActionRow({
-            title: _('Enable Alarm'),
-            subtitle: _('Turn on the alarm functionality')
-        });
-        const alarmEnabledSwitch = new Gtk.Switch({
-            active: settings.get_boolean('alarm-enabled'),
+        let alarms = parseAlarms(settings.get_string('alarms'));
+        const saveAlarms = () => settings.set_string('alarms', JSON.stringify(alarms));
+
+        const hasSpecificDate = (alarm) => alarm.year !== undefined && alarm.month !== undefined && alarm.day !== undefined;
+
+        const formatAlarmSubtitle = (alarm) => {
+            const time = `${String(alarm.hour).padStart(2, '0')}:${String(alarm.minute).padStart(2, '0')}`;
+            if (hasSpecificDate(alarm)) {
+                const date = `${String(alarm.day).padStart(2, '0')}-${String(alarm.month).padStart(2, '0')}-${alarm.year}`;
+                return `${time}  ·  ${date}`;
+            }
+            return `${time}  ·  ${_('Every day')}`;
+        };
+
+        const addAlarmButtonRow = new Adw.ActionRow({ title: _('Add New Alarm') });
+        const addAlarmButton = new Gtk.Button({
+            icon_name: 'list-add-symbolic',
             valign: Gtk.Align.CENTER
         });
-        alarmEnabledSwitch.connect('notify::active', (w) => {
-            settings.set_boolean('alarm-enabled', w.active);
-        });
-        alarmEnabledRow.add_suffix(alarmEnabledSwitch);
-        alarmGroup.add(alarmEnabledRow);
+        addAlarmButtonRow.add_suffix(addAlarmButton);
+        addAlarmButtonRow.set_activatable_widget(addAlarmButton);
 
-        const alarmTimeRow = new Adw.ActionRow({
-            title: _('Alarm Time'),
-            subtitle: _('Set the hour and minute for the alarm')
-        });
-        const hourSpin = new Gtk.SpinButton({
-            adjustment: new Gtk.Adjustment({ lower: 0, upper: 23, step_increment: 1, value: settings.get_int('alarm-hour') }),
-            valign: Gtk.Align.CENTER,
-            wrap: true
-        });
-        const minuteSpin = new Gtk.SpinButton({
-            adjustment: new Gtk.Adjustment({ lower: 0, upper: 59, step_increment: 1, value: settings.get_int('alarm-minute') }),
-            valign: Gtk.Align.CENTER,
-            wrap: true
-        });
-        hourSpin.connect('value-changed', (w) => {
-            const hour = Math.floor(w.get_value());
-            settings.set_int('alarm-hour', hour);
-        });
-        minuteSpin.connect('value-changed', (w) => {
-            const minute = Math.floor(w.get_value());
-            settings.set_int('alarm-minute', minute);
-        });
-        alarmTimeRow.add_suffix(hourSpin);
-        alarmTimeRow.add_suffix(new Gtk.Label({ label: ' : ' }));
-        alarmTimeRow.add_suffix(minuteSpin);
-        alarmGroup.add(alarmTimeRow);
+        const buildAlarmRow = (alarm) => {
+            const row = new Adw.ExpanderRow({
+                title: alarm.label || _('Alarm'),
+                subtitle: formatAlarmSubtitle(alarm)
+            });
 
-        const alarmMessageRow = new Adw.EntryRow({
-            title: _('Alarm Message'),
-            text: settings.get_string('alarm-message')
+            const enabledSwitch = new Gtk.Switch({
+                active: alarm.enabled,
+                valign: Gtk.Align.CENTER
+            });
+            enabledSwitch.connect('notify::active', (w) => {
+                alarm.enabled = w.active;
+                saveAlarms();
+            });
+            row.add_prefix(enabledSwitch);
+
+            const timeRow = new Adw.ActionRow({ title: _('Time') });
+            const hourSpin = new Gtk.SpinButton({
+                adjustment: new Gtk.Adjustment({ lower: 0, upper: 23, step_increment: 1, value: alarm.hour }),
+                valign: Gtk.Align.CENTER,
+                wrap: true
+            });
+            const minuteSpin = new Gtk.SpinButton({
+                adjustment: new Gtk.Adjustment({ lower: 0, upper: 59, step_increment: 1, value: alarm.minute }),
+                valign: Gtk.Align.CENTER,
+                wrap: true
+            });
+            hourSpin.connect('value-changed', (w) => {
+                alarm.hour = Math.floor(w.get_value());
+                row.set_subtitle(formatAlarmSubtitle(alarm));
+                saveAlarms();
+            });
+            minuteSpin.connect('value-changed', (w) => {
+                alarm.minute = Math.floor(w.get_value());
+                row.set_subtitle(formatAlarmSubtitle(alarm));
+                saveAlarms();
+            });
+            timeRow.add_suffix(hourSpin);
+            timeRow.add_suffix(new Gtk.Label({ label: ' : ' }));
+            timeRow.add_suffix(minuteSpin);
+            row.add_row(timeRow);
+
+            const today = GLib.DateTime.new_now_local();
+
+            const specificDateRow = new Adw.ActionRow({
+                title: _('Specific Date'),
+                subtitle: _('Ring once on a chosen date instead of every day')
+            });
+            const specificDateSwitch = new Gtk.Switch({
+                active: hasSpecificDate(alarm),
+                valign: Gtk.Align.CENTER
+            });
+            specificDateRow.add_suffix(specificDateSwitch);
+            row.add_row(specificDateRow);
+
+            const dateRow = new Adw.ActionRow({ title: _('Date') });
+            const daySpin = new Gtk.SpinButton({
+                adjustment: new Gtk.Adjustment({ lower: 1, upper: 31, step_increment: 1, value: alarm.day || today.get_day_of_month() }),
+                valign: Gtk.Align.CENTER,
+                wrap: true
+            });
+            const monthSpin = new Gtk.SpinButton({
+                adjustment: new Gtk.Adjustment({ lower: 1, upper: 12, step_increment: 1, value: alarm.month || today.get_month() }),
+                valign: Gtk.Align.CENTER,
+                wrap: true
+            });
+            const yearSpin = new Gtk.SpinButton({
+                adjustment: new Gtk.Adjustment({ lower: today.get_year(), upper: today.get_year() + 20, step_increment: 1, value: alarm.year || today.get_year() }),
+                valign: Gtk.Align.CENTER
+            });
+            dateRow.add_suffix(daySpin);
+            dateRow.add_suffix(new Gtk.Label({ label: '/' }));
+            dateRow.add_suffix(monthSpin);
+            dateRow.add_suffix(new Gtk.Label({ label: '/' }));
+            dateRow.add_suffix(yearSpin);
+            dateRow.set_visible(specificDateSwitch.active);
+            row.add_row(dateRow);
+
+            const applyDate = () => {
+                if (specificDateSwitch.active) {
+                    alarm.day = Math.floor(daySpin.get_value());
+                    alarm.month = Math.floor(monthSpin.get_value());
+                    alarm.year = Math.floor(yearSpin.get_value());
+                } else {
+                    delete alarm.day;
+                    delete alarm.month;
+                    delete alarm.year;
+                }
+                row.set_subtitle(formatAlarmSubtitle(alarm));
+                saveAlarms();
+            };
+
+            specificDateSwitch.connect('notify::active', (w) => {
+                dateRow.set_visible(w.active);
+                applyDate();
+            });
+            daySpin.connect('value-changed', applyDate);
+            monthSpin.connect('value-changed', applyDate);
+            yearSpin.connect('value-changed', applyDate);
+
+            const labelRow = new Adw.EntryRow({
+                title: _('Label'),
+                text: alarm.label
+            });
+            labelRow.connect('changed', (w) => {
+                alarm.label = w.get_text();
+                row.set_title(alarm.label || _('Alarm'));
+                saveAlarms();
+            });
+            row.add_row(labelRow);
+
+            const deleteRow = new Adw.ActionRow({ title: _('Remove This Alarm') });
+            const deleteButton = new Gtk.Button({
+                icon_name: 'user-trash-symbolic',
+                valign: Gtk.Align.CENTER,
+                css_classes: ['destructive-action']
+            });
+            deleteButton.connect('clicked', () => {
+                alarms = alarms.filter(existing => existing.id !== alarm.id);
+                saveAlarms();
+                alarmGroup.remove(row);
+            });
+            deleteRow.add_suffix(deleteButton);
+            deleteRow.set_activatable_widget(deleteButton);
+            row.add_row(deleteRow);
+
+            return row;
+        };
+
+        for (const alarm of alarms) alarmGroup.add(buildAlarmRow(alarm));
+
+        addAlarmButton.connect('clicked', () => {
+            const alarm = { id: GLib.uuid_string_random(), hour: 8, minute: 0, enabled: true, label: _('Alarm') };
+            alarms.push(alarm);
+            saveAlarms();
+            alarmGroup.remove(addAlarmButtonRow);
+            alarmGroup.add(buildAlarmRow(alarm));
+            alarmGroup.add(addAlarmButtonRow);
         });
-        alarmMessageRow.connect('changed', (w) => settings.set_string('alarm-message', w.get_text()));
-        alarmGroup.add(alarmMessageRow);
+
+        alarmGroup.add(addAlarmButtonRow);
+
+        const snoozeRow = new Adw.ActionRow({
+            title: _('Snooze Duration'),
+            subtitle: _('Minutes to wait before a snoozed alarm rings again')
+        });
+        const snoozeSpin = new Gtk.SpinButton({
+            adjustment: new Gtk.Adjustment({ lower: 1, upper: 60, step_increment: 1, value: settings.get_int('snooze-minutes') }),
+            valign: Gtk.Align.CENTER
+        });
+        snoozeSpin.connect('value-changed', (w) => {
+            settings.set_int('snooze-minutes', Math.floor(w.get_value()));
+        });
+        snoozeRow.add_suffix(snoozeSpin);
+        alarmGroup.add(snoozeRow);
 
         const aboutGroup = new Adw.PreferencesGroup({
             title: _('About'),

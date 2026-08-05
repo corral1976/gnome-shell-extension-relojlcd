@@ -4,6 +4,7 @@ import GLib from 'gi://GLib';
 import St from 'gi://St';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import { Extension, gettext as _ } from 'resource:///org/gnome/shell/extensions/extension.js';
 import { buildCustomTheme } from './colorUtils.js';
 
@@ -83,7 +84,11 @@ export default class RelojLCDExtension extends Extension {
     enable() {
         this._settings = this.getSettings();
         this._isAlarming = false;
-        this._lastAlarmStamp = null;
+        this._alarms = [];
+        this._lastAlarmStamps = new Map();
+        this._pendingAlarms = [];
+        this._snoozeTimeoutIds = new Map();
+        this._activeNotification = null;
         this._lastCheckedTime = null;
         this._dotState = true;
         this._alarmBlinkState = true;
@@ -106,6 +111,9 @@ export default class RelojLCDExtension extends Extension {
         this._alarmDot = null;
         this._themeContextId = null;
 
+        this._migrateLegacyAlarm();
+        this._alarms = this._parseAlarms();
+
         this._loadFont();
         this._buildIndicator();
 
@@ -121,7 +129,7 @@ export default class RelojLCDExtension extends Extension {
             'changed::panel-position', () => this._resetView(),
             'changed::is-widget', () => this._resetView(),
             'changed::flicker-enabled', () => this._updateFlicker(),
-            'changed::alarm-enabled', () => { this._updateAlarmDot(); this._updateClock(); },
+            'changed::alarms', () => { this._alarms = this._parseAlarms(); this._updateAlarmDot(); this._updateClock(); },
             'changed::font-style', () => { this._invalidateStyleCache(); this._updateStyle(); },
             this
         );
@@ -134,6 +142,44 @@ export default class RelojLCDExtension extends Extension {
         this._lastAppliedStyle = null;
         this._lastAppliedShadowStyle = null;
         this._lastAppliedContainerStyle = null;
+    }
+
+    _parseAlarms() {
+        let parsed;
+        try {
+            parsed = JSON.parse(this._settings.get_string('alarms'));
+        } catch (e) {
+            parsed = [];
+        }
+        if (!Array.isArray(parsed)) return [];
+        return parsed.filter(alarm => {
+            if (!alarm || typeof alarm.id !== 'string') return false;
+            if (!Number.isInteger(alarm.hour) || alarm.hour < 0 || alarm.hour > 23) return false;
+            if (!Number.isInteger(alarm.minute) || alarm.minute < 0 || alarm.minute > 59) return false;
+
+            const hasDate = alarm.year !== undefined || alarm.month !== undefined || alarm.day !== undefined;
+            if (!hasDate) return true;
+
+            return Number.isInteger(alarm.year) && alarm.year >= 1970 && alarm.year <= 9999 &&
+                Number.isInteger(alarm.month) && alarm.month >= 1 && alarm.month <= 12 &&
+                Number.isInteger(alarm.day) && alarm.day >= 1 && alarm.day <= 31;
+        });
+    }
+
+    _migrateLegacyAlarm() {
+        if (this._settings.get_boolean('alarms-migrated')) return;
+        this._settings.set_boolean('alarms-migrated', true);
+
+        if (!this._settings.get_boolean('alarm-enabled')) return;
+
+        const legacyAlarm = {
+            id: GLib.uuid_string_random(),
+            hour: this._settings.get_int('alarm-hour'),
+            minute: this._settings.get_int('alarm-minute'),
+            enabled: true,
+            label: this._settings.get_string('alarm-message') || _('Alarm')
+        };
+        this._settings.set_string('alarms', JSON.stringify([legacyAlarm]));
     }
 
     _connect(obj, signal, callback) {
@@ -155,7 +201,12 @@ export default class RelojLCDExtension extends Extension {
     }
 
     disable() {
-        this._stopAlarm();
+        this._stopAlarm(false);
+
+        for (const timeoutId of this._snoozeTimeoutIds.values())
+            GLib.Source.remove(timeoutId);
+        this._snoozeTimeoutIds.clear();
+
         this._removeClockTimeout();
         this._removeFlickerTimeout();
 
@@ -234,7 +285,9 @@ export default class RelojLCDExtension extends Extension {
         this._settings = null;
 
         this._invalidateStyleCache();
-        this._lastAlarmStamp = null;
+        this._alarms = [];
+        this._pendingAlarms = [];
+        this._lastAlarmStamps.clear();
         this._lastCheckedTime = null;
     }
 
@@ -447,7 +500,7 @@ export default class RelojLCDExtension extends Extension {
             });
             this._indicator.set_child(this._container);
             this._setupDragHandlers(this._indicator);
-            Main.layoutManager.addChrome(this._indicator, { affectsInputRegion: true });
+            Main.layoutManager.addChrome(this._indicator);
             this._isChromeIndicator = true;
         } else {
             this._isChromeIndicator = false;
@@ -515,6 +568,8 @@ export default class RelojLCDExtension extends Extension {
             return GLib.SOURCE_CONTINUE;
         };
 
+        update();
+
         const blinkEnabled = this._settings.get_boolean('blink-dots');
         const showSeconds = this._settings.get_boolean('show-seconds');
         const interval = blinkEnabled ? 500 : (showSeconds ? 1000 : 10000);
@@ -550,35 +605,53 @@ export default class RelojLCDExtension extends Extension {
 
     _updateAlarmDot() {
         if (!this._alarmDot || !this._settings) return;
-        this._alarmDot.visible = this._settings.get_boolean('alarm-enabled');
+        this._alarmDot.visible = this._alarms.some(alarm => alarm.enabled);
+    }
+
+    _disableOneTimeAlarm(alarm) {
+        alarm.enabled = false;
+        this._settings.set_string('alarms', JSON.stringify(this._alarms));
+        this._updateAlarmDot();
     }
 
     _checkAlarm(now) {
-        if (!this._settings.get_boolean('alarm-enabled') || this._isAlarming) {
-            this._lastCheckedTime = now;
-            return;
-        }
-
-        const targetHour = this._settings.get_int('alarm-hour');
-        const targetMinute = this._settings.get_int('alarm-minute');
-        const target = GLib.DateTime.new_local(
-            now.get_year(), now.get_month(), now.get_day_of_month(),
-            targetHour, targetMinute, 0
-        );
-
-        const reachedTarget = this._lastCheckedTime
-            ? this._lastCheckedTime.compare(target) < 0 && now.compare(target) >= 0
-            : now.get_hour() === targetHour && now.get_minute() === targetMinute;
-
+        const previousCheckedTime = this._lastCheckedTime;
         this._lastCheckedTime = now;
 
-        if (!reachedTarget) return;
+        if (!this._alarms.length) return;
 
-        const stamp = `${now.get_year()}-${now.get_day_of_year()}-${targetHour}:${targetMinute}`;
-        if (this._lastAlarmStamp === stamp) return;
-        this._lastAlarmStamp = stamp;
+        for (const alarm of this._alarms) {
+            if (!alarm.enabled) continue;
 
-        this._triggerAlarm();
+            const hasDate = alarm.year !== undefined;
+            const target = hasDate
+                ? GLib.DateTime.new_local(alarm.year, alarm.month, alarm.day, alarm.hour, alarm.minute, 0)
+                : GLib.DateTime.new_local(now.get_year(), now.get_month(), now.get_day_of_month(), alarm.hour, alarm.minute, 0);
+
+            if (!target) continue;
+
+            const reachedTarget = previousCheckedTime
+                ? previousCheckedTime.compare(target) < 0 && now.compare(target) >= 0
+                : (hasDate
+                    ? now.get_year() === alarm.year && now.get_month() === alarm.month && now.get_day_of_month() === alarm.day &&
+                      now.get_hour() === alarm.hour && now.get_minute() === alarm.minute
+                    : now.get_hour() === alarm.hour && now.get_minute() === alarm.minute);
+
+            if (!reachedTarget) continue;
+
+            const stamp = `${now.get_year()}-${now.get_day_of_year()}-${alarm.hour}:${alarm.minute}`;
+            if (this._lastAlarmStamps.get(alarm.id) === stamp) continue;
+            this._lastAlarmStamps.set(alarm.id, stamp);
+
+            if (hasDate) this._disableOneTimeAlarm(alarm);
+
+            if (this._isAlarming) {
+                if (!this._pendingAlarms.some(pending => pending.id === alarm.id))
+                    this._pendingAlarms.push(alarm);
+            } else {
+                this._triggerAlarm(alarm);
+            }
+        }
     }
 
     _playAlarmSound() {
@@ -597,13 +670,11 @@ export default class RelojLCDExtension extends Extension {
         }
     }
 
-    _triggerAlarm() {
+    _triggerAlarm(alarm) {
         this._isAlarming = true;
         this._alarmSoundCancellable = new Gio.Cancellable();
 
-        const message = this._settings.get_string('alarm-message') || _('Alarm');
-        Main.notify(_('Reloj LCD'), message);
-
+        this._showAlarmNotification(alarm);
         this._playAlarmSound();
 
         if (this._alarmSoundTimeoutId) GLib.Source.remove(this._alarmSoundTimeoutId);
@@ -626,7 +697,44 @@ export default class RelojLCDExtension extends Extension {
         });
     }
 
-    _stopAlarm() {
+    _showAlarmNotification(alarm) {
+        const source = MessageTray.getSystemSource();
+        const notification = new MessageTray.Notification({
+            source,
+            title: _('Reloj LCD'),
+            body: alarm.label || _('Alarm'),
+            urgency: MessageTray.Urgency.CRITICAL
+        });
+
+        notification.addAction(_('Snooze'), () => this._snoozeAlarm(alarm));
+        notification.addAction(_('Dismiss'), () => this._stopAlarm());
+
+        const destroyHandlerId = notification.connect('destroy', () => {
+            notification.disconnect(destroyHandlerId);
+            if (this._activeNotification === notification)
+                this._activeNotification = null;
+        });
+
+        this._activeNotification = notification;
+        source.addNotification(notification);
+    }
+
+    _snoozeAlarm(alarm) {
+        this._stopAlarm();
+
+        const existingTimeoutId = this._snoozeTimeoutIds.get(alarm.id);
+        if (existingTimeoutId) GLib.Source.remove(existingTimeoutId);
+
+        const snoozeMinutes = this._settings.get_int('snooze-minutes');
+        const timeoutId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, snoozeMinutes * 60, () => {
+            this._snoozeTimeoutIds.delete(alarm.id);
+            this._triggerAlarm(alarm);
+            return GLib.SOURCE_REMOVE;
+        });
+        this._snoozeTimeoutIds.set(alarm.id, timeoutId);
+    }
+
+    _stopAlarm(triggerPending = true) {
         this._isAlarming = false;
 
         if (this._alarmSoundCancellable) {
@@ -649,12 +757,22 @@ export default class RelojLCDExtension extends Extension {
             this._blinkTimeoutId = null;
         }
 
+        if (this._activeNotification) {
+            this._activeNotification.destroy();
+            this._activeNotification = null;
+        }
+
         if (this._clockLabel) {
             this._clockLabel.set_opacity(255);
             this._invalidateStyleCache();
             this._updateStyle();
         }
         this._updateFlicker();
+
+        if (triggerPending && this._pendingAlarms.length) {
+            const nextAlarm = this._pendingAlarms.shift();
+            this._triggerAlarm(nextAlarm);
+        }
     }
 
     _updateStyle() {

@@ -24,7 +24,7 @@ Repository mirrors: [GitLab](https://gitlab.com/corral1976/gnome-shell-extension
 - 4 font styles: Regular, Bold, Italic and Bold Italic, applied live from the preferences window
 - 8 color themes: neon green, amber, retro gray, ruby, sapphire, white, violet and gold
 - Custom color picker for digits, separators, alarm dot and border, with a live preview in the preferences window
-- Alarm with sound and customizable message
+- Multiple alarms with sound, custom labels and snooze support
 - Built-in preferences panel (GTK4/Adwaita)
 - Looks good in both light and dark shell themes
 - Desktop widget mode (draggable) or docked to the panel
@@ -91,7 +91,7 @@ If nothing shows up after all this, try restarting your whole computer once befo
 
 ## Requirements
 
-- GNOME Shell 45, 46, 47 or 48
+- GNOME Shell 45, 46, 47, 48, 49 or 50
 - The `gnome-extensions-app` (comes preinstalled on most distros)
 
 ---

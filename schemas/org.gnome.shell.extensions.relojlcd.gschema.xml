@@ -59,23 +59,38 @@
     </key>
     <key name="alarm-enabled" type="b">
       <default>false</default>
-      <summary>Enable alarm</summary>
-      <description>Turn on the alarm functionality</description>
+      <summary>Enable alarm (deprecated)</summary>
+      <description>Deprecated since 60, kept only so upgrades from versions before 60 can migrate into the alarms list</description>
     </key>
     <key name="alarm-hour" type="i">
       <default>8</default>
-      <summary>Alarm hour</summary>
-      <description>Hour for the alarm (0-23)</description>
+      <summary>Alarm hour (deprecated)</summary>
+      <description>Deprecated since 60, kept only so upgrades from versions before 60 can migrate into the alarms list</description>
     </key>
     <key name="alarm-minute" type="i">
       <default>0</default>
-      <summary>Alarm minute</summary>
-      <description>Minute for the alarm (0-59)</description>
+      <summary>Alarm minute (deprecated)</summary>
+      <description>Deprecated since 60, kept only so upgrades from versions before 60 can migrate into the alarms list</description>
     </key>
     <key name="alarm-message" type="s">
       <default>'Alarm'</default>
-      <summary>Alarm message</summary>
-      <description>Custom message displayed when alarm triggers</description>
+      <summary>Alarm message (deprecated)</summary>
+      <description>Deprecated since 60, kept only so upgrades from versions before 60 can migrate into the alarms list</description>
+    </key>
+    <key name="alarms" type="s">
+      <default>'[]'</default>
+      <summary>Alarms list</summary>
+      <description>JSON array of alarm objects, each with id, hour, minute, enabled, label and optional year/month/day for a one-time alarm on a specific date (omitted means the alarm repeats every day)</description>
+    </key>
+    <key name="alarms-migrated" type="b">
+      <default>false</default>
+      <summary>Legacy alarm migrated</summary>
+      <description>Internal flag tracking whether the pre-60 single alarm was migrated into the alarms list</description>
+    </key>
+    <key name="snooze-minutes" type="i">
+      <default>9</default>
+      <summary>Snooze duration in minutes</summary>
+      <description>How many minutes to wait before a snoozed alarm rings again</description>
     </key>
     <key name="show-date" type="b">
       <default>false</default>
