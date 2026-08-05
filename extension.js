@@ -506,6 +506,8 @@ export default class RelojLCDExtension extends Extension {
             this._isChromeIndicator = false;
             const pos = this._settings.get_string('panel-position');
             this._indicator = new PanelMenu.Button(0.5, 'RelojLCD', true);
+            this._container.y_align = Clutter.ActorAlign.CENTER;
+            this._container.y_expand = false;
             this._indicator.add_child(this._container);
 
             this._connect(this._indicator, 'button-press-event', (actor, event) => {
@@ -596,7 +598,7 @@ export default class RelojLCDExtension extends Extension {
             if (isWidget) {
                 timeStr = `${timeStr}\n${dateStr}`;
             } else {
-                timeStr = `${timeStr}  ${dateStr}`;
+                timeStr = `${timeStr}  --  ${dateStr}`;
             }
         }
 
