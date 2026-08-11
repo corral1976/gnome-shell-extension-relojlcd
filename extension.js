@@ -1,0 +1,1124 @@
+import Gio from 'gi://Gio';
+import Clutter from 'gi://Clutter';
+import GLib from 'gi://GLib';
+import St from 'gi://St';
+import Atk from 'gi://Atk';
+import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
+import { Extension, gettext as _ } from 'resource:///org/gnome/shell/extensions/extension.js';
+import { buildCustomTheme } from './colorUtils.js';
+
+const THEME_MAP = {
+    gray: {
+        main: '#000000',
+        bg: 'rgba(120, 150, 100, 0.95)',
+        border: '#6a8a5a'
+    },
+    amber: {
+        main: '#ffb000',
+        bg: 'rgba(255, 176, 0, 0.2)',
+        border: '#ffb000',
+        glow: 'rgba(255, 176, 0, 0.8)'
+    },
+    green: {
+        main: '#00ff00',
+        bg: 'rgba(0, 255, 0, 0.2)',
+        border: '#00ff00',
+        glow: 'rgba(0, 255, 0, 0.8)'
+    },
+    ruby: {
+        main: '#ff5555',
+        bg: 'rgba(255, 85, 85, 0.2)',
+        border: '#ff5555',
+        glow: 'rgba(255, 85, 85, 0.8)'
+    },
+    sapphire: {
+        main: '#0088ff',
+        bg: 'rgba(0, 136, 255, 0.2)',
+        border: '#0088ff',
+        glow: 'rgba(0, 136, 255, 0.8)'
+    },
+    white: {
+        main: '#ffffff',
+        bg: 'rgba(255, 255, 255, 0.2)',
+        border: '#ffffff',
+        glow: 'rgba(255, 255, 255, 0.8)'
+    },
+    violet: {
+        main: '#8b5cf6',
+        bg: 'rgba(139, 92, 246, 0.2)',
+        border: '#8b5cf6',
+        glow: 'rgba(139, 92, 246, 0.8)'
+    },
+    gold: {
+        main: '#ffd700',
+        bg: 'rgba(255, 215, 0, 0.2)',
+        border: '#ffd700',
+        glow: 'rgba(255, 215, 0, 0.8)'
+    }
+};
+
+const FLICKER_THRESHOLDS = {
+    white: [
+        { threshold: 0.80, opacity: 255 },
+        { threshold: 0.90, opacity: 200 },
+        { threshold: 0.96, opacity: 150 },
+        { threshold: 1.00, opacity: 100 }
+    ],
+    gray: [
+        { threshold: 0.85, opacity: 255 },
+        { threshold: 0.92, opacity: 230 },
+        { threshold: 0.97, opacity: 200 },
+        { threshold: 1.00, opacity: 170 }
+    ],
+    default: [
+        { threshold: 0.85, opacity: 255 },
+        { threshold: 0.92, opacity: 240 },
+        { threshold: 0.97, opacity: 220 },
+        { threshold: 1.00, opacity: 200 }
+    ]
+};
+
+export default class RelojLCDExtension extends Extension {
+    enable() {
+        this._settings = this.getSettings();
+        this._isAlarming = false;
+        this._alarms = [];
+        this._lastAlarmStamps = new Map();
+        this._pendingAlarms = [];
+        this._snoozeTimeoutIds = new Map();
+        this._activeNotification = null;
+        this._lastCheckedTime = null;
+        this._dotState = true;
+        this._alarmBlinkState = true;
+        this._clockTimeoutId = null;
+        this._alarmTimeoutId = null;
+        this._alarmSoundTimeoutId = null;
+        this._alarmSoundCancellable = null;
+        this._testSoundCancellable = null;
+        this._blinkTimeoutId = null;
+        this._initTimeoutId = null;
+        this._flickerTimeoutId = null;
+        this._styleUpdateDebounceId = null;
+        this._isChromeIndicator = false;
+        this._dragGrab = null;
+        this._dragHandler = null;
+        this._releaseHandler = null;
+        this._signals = [];
+        this._lastAppliedStyle = null;
+        this._lastAppliedShadowStyle = null;
+        this._lastAppliedContainerStyle = null;
+        this._alarmDot = null;
+        this._alarmDotShadow = null;
+        this._alarmDotWrapper = null;
+        this._themeContextId = null;
+
+        this._migrateLegacyAlarm();
+        this._alarms = this._parseAlarms();
+
+        this._loadFont();
+        this._buildIndicator();
+
+        this._settings.connectObject(
+            'changed::font-size', () => { this._invalidateStyleCache(); this._scheduleStyleUpdate(); },
+            'changed::clock-color', () => { this._invalidateStyleCache(); this._updateStyle(); },
+            'changed::custom-color', () => { this._invalidateStyleCache(); this._updateStyle(); },
+            'changed::glow-intensity', () => { this._invalidateStyleCache(); this._scheduleStyleUpdate(); },
+            'changed::show-seconds', () => { this._invalidateStyleCache(); this._updateClock(); this._updateStyle(); },
+            'changed::show-date', () => { this._invalidateStyleCache(); this._updateClock(); this._updateStyle(); },
+            'changed::blink-dots', () => this._updateClock(),
+            'changed::clock-format-24h', () => this._updateClock(),
+            'changed::panel-position', () => this._resetView(),
+            'changed::is-widget', () => this._resetView(),
+            'changed::flicker-enabled', () => this._updateFlicker(),
+            'changed::alarms', () => { this._alarms = this._parseAlarms(); this._updateAlarmDot(); this._updateClock(); },
+            'changed::font-style', () => { this._invalidateStyleCache(); this._updateStyle(); },
+            'changed::test-alarm-counter', () => this._startTestSound(),
+            'changed::test-alarm-stop-counter', () => this._stopTestSound(),
+            this
+        );
+
+        this._updateClock();
+        this._updateFlicker();
+    }
+
+    _invalidateStyleCache() {
+        this._lastAppliedStyle = null;
+        this._lastAppliedShadowStyle = null;
+        this._lastAppliedContainerStyle = null;
+    }
+
+    _parseAlarms() {
+        let parsed;
+        try {
+            parsed = JSON.parse(this._settings.get_string('alarms'));
+        } catch (e) {
+            parsed = [];
+        }
+        if (!Array.isArray(parsed)) return [];
+        return parsed.filter(alarm => {
+            if (!alarm || typeof alarm.id !== 'string') return false;
+            if (!Number.isInteger(alarm.hour) || alarm.hour < 0 || alarm.hour > 23) return false;
+            if (!Number.isInteger(alarm.minute) || alarm.minute < 0 || alarm.minute > 59) return false;
+
+            const hasDate = alarm.year !== undefined || alarm.month !== undefined || alarm.day !== undefined;
+            if (!hasDate) return true;
+
+            return Number.isInteger(alarm.year) && alarm.year >= 1970 && alarm.year <= 9999 &&
+                Number.isInteger(alarm.month) && alarm.month >= 1 && alarm.month <= 12 &&
+                Number.isInteger(alarm.day) && alarm.day >= 1 && alarm.day <= 31;
+        });
+    }
+
+    _migrateLegacyAlarm() {
+        if (this._settings.get_boolean('alarms-migrated')) return;
+        this._settings.set_boolean('alarms-migrated', true);
+
+        if (!this._settings.get_boolean('alarm-enabled')) return;
+
+        const legacyAlarm = {
+            id: GLib.uuid_string_random(),
+            hour: this._settings.get_int('alarm-hour'),
+            minute: this._settings.get_int('alarm-minute'),
+            enabled: true,
+            label: this._settings.get_string('alarm-message') || _('Alarm')
+        };
+        this._settings.set_string('alarms', JSON.stringify([legacyAlarm]));
+    }
+
+    _connect(obj, signal, callback) {
+        const id = obj.connect(signal, callback);
+        this._signals.push({ obj, id });
+        return id;
+    }
+
+    _resetView() {
+        if (this._indicator) {
+            if (this._isChromeIndicator) Main.layoutManager.removeChrome(this._indicator);
+            this._indicator.destroy();
+            this._indicator = null;
+        }
+        if (this._themeContextId) {
+            const themeContext = St.ThemeContext.get_for_stage(global.stage);
+            themeContext.disconnect(this._themeContextId);
+            this._themeContextId = null;
+        }
+        this._invalidateStyleCache();
+        this._clockContainer = null;
+        this._clockLabel = null;
+        this._shadowLabel = null;
+        this._container = null;
+        this._alarmDot = null;
+        this._alarmDotShadow = null;
+        this._alarmDotWrapper = null;
+        this._buildIndicator();
+        this._updateFlicker();
+    }
+
+    disable() {
+        this._stopAlarm(false);
+        this._stopTestSound();
+
+        for (const timeoutId of this._snoozeTimeoutIds.values())
+            GLib.Source.remove(timeoutId);
+        this._snoozeTimeoutIds.clear();
+
+        this._removeClockTimeout();
+        this._removeFlickerTimeout();
+        this._removeStyleUpdateDebounce();
+
+        if (this._themeContextId) {
+            const themeContext = St.ThemeContext.get_for_stage(global.stage);
+            themeContext.disconnect(this._themeContextId);
+            this._themeContextId = null;
+        }
+
+        if (this._initTimeoutId) {
+            GLib.Source.remove(this._initTimeoutId);
+            this._initTimeoutId = null;
+        }
+
+        if (this._dragGrab) {
+            this._dragGrab.dismiss();
+            this._dragGrab = null;
+        }
+
+        if (this._indicator && this._dragHandler) {
+            this._indicator.disconnect(this._dragHandler);
+            this._dragHandler = null;
+        }
+
+        if (this._indicator && this._releaseHandler) {
+            this._indicator.disconnect(this._releaseHandler);
+            this._releaseHandler = null;
+        }
+
+        if (this._signals) {
+            for (const { obj, id } of this._signals) {
+                if (obj) obj.disconnect(id);
+            }
+            this._signals = [];
+        }
+
+        if (this._clockLabel) {
+            this._clockLabel.destroy();
+            this._clockLabel = null;
+        }
+
+        if (this._shadowLabel) {
+            this._shadowLabel.destroy();
+            this._shadowLabel = null;
+        }
+
+        if (this._alarmDot) {
+            this._alarmDot.destroy();
+            this._alarmDot = null;
+        }
+
+        if (this._alarmDotShadow) {
+            this._alarmDotShadow.destroy();
+            this._alarmDotShadow = null;
+        }
+
+        if (this._alarmDotWrapper) {
+            this._alarmDotWrapper.destroy();
+            this._alarmDotWrapper = null;
+        }
+
+        if (this._clockContainer) {
+            this._clockContainer.destroy();
+            this._clockContainer = null;
+        }
+
+        if (this._container) {
+            this._container.destroy();
+            this._container = null;
+        }
+
+        if (this._indicator) {
+            if (this._isChromeIndicator) Main.layoutManager.removeChrome(this._indicator);
+            this._indicator.destroy();
+            this._indicator = null;
+        }
+
+        this._settings?.disconnectObject(this);
+        this._settings = null;
+
+        this._invalidateStyleCache();
+        this._alarms = [];
+        this._pendingAlarms = [];
+        this._lastAlarmStamps.clear();
+        this._lastCheckedTime = null;
+    }
+
+    _removeClockTimeout() {
+        if (this._clockTimeoutId) {
+            GLib.Source.remove(this._clockTimeoutId);
+            this._clockTimeoutId = null;
+        }
+    }
+
+    _removeFlickerTimeout() {
+        if (this._flickerTimeoutId) {
+            GLib.Source.remove(this._flickerTimeoutId);
+            this._flickerTimeoutId = null;
+        }
+    }
+
+    _removeStyleUpdateDebounce() {
+        if (this._styleUpdateDebounceId) {
+            GLib.Source.remove(this._styleUpdateDebounceId);
+            this._styleUpdateDebounceId = null;
+        }
+    }
+
+    _scheduleStyleUpdate() {
+        this._removeStyleUpdateDebounce();
+        this._styleUpdateDebounceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
+            this._styleUpdateDebounceId = null;
+            this._updateStyle();
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    _loadFont() {
+        const fontPath = this.path + '/assets/DSEG7Classic-Regular.ttf';
+        const fontFile = Gio.File.new_for_path(fontPath);
+        
+        if (fontFile.query_exists(null)) {
+            try {
+                const fontMap = Clutter.FontMap.get_default();
+                fontMap.add_font_file(fontPath);
+            } catch (e) {
+                console.error('RelojLCD: Failed to load custom font, falling back to monospace', e);
+            }
+        } else {
+            console.error('RelojLCD: Font file not found');
+        }
+    }
+
+    _addFlickerTimeout(interval, callback) {
+        this._removeFlickerTimeout();
+        this._flickerTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, interval, callback);
+    }
+
+    _updateFlicker() {
+        this._removeFlickerTimeout();
+
+        if (!this._settings.get_boolean('flicker-enabled') || this._isAlarming) {
+            if (this._clockLabel) {
+                this._clockLabel.set_opacity(255);
+            }
+            if (this._shadowLabel) {
+                this._shadowLabel.set_opacity(255);
+            }
+            return;
+        }
+
+        const colorType = this._settings.get_string('clock-color');
+        const isRetro = colorType === 'gray';
+        const thresholds = FLICKER_THRESHOLDS[colorType] || FLICKER_THRESHOLDS.default;
+
+        const flicker = () => {
+            if (!this._settings || !this._clockLabel || !this._settings.get_boolean('flicker-enabled') || this._isAlarming) {
+                this._flickerTimeoutId = null;
+                return GLib.SOURCE_REMOVE;
+            }
+
+            const random = Math.random();
+            const opacity = thresholds.find(t => random < t.threshold)?.opacity || 255;
+
+            this._clockLabel.set_opacity(opacity);
+
+            if (isRetro && this._shadowLabel) {
+                this._shadowLabel.set_opacity(opacity);
+            }
+
+            const nextInterval = 50 + Math.floor(Math.random() * 150);
+            this._addFlickerTimeout(nextInterval, flicker);
+            return GLib.SOURCE_REMOVE;
+        };
+
+        this._addFlickerTimeout(100, flicker);
+    }
+
+    _setupDragHandlers(actor) {
+        this._connect(actor, 'button-press-event', (actor, event) => {
+            if (this._isAlarming) {
+                this._stopAlarm();
+                return Clutter.EVENT_STOP;
+            }
+
+            if (event.get_button() === 1) {
+                let [x, y] = event.get_coords();
+                let [sx, sy] = actor.get_transformed_position();
+                let grabX = x - sx;
+                let grabY = y - sy;
+
+                this._dragGrab = global.stage.grab(actor);
+
+                this._dragHandler = actor.connect('motion-event', (dragActor, motionEvent) => {
+                    let [mx, my] = motionEvent.get_coords();
+                    let [width, height] = dragActor.get_size();
+                    let monitor = global.display.get_monitor_geometry(global.display.get_primary_monitor());
+                    
+                    let newX = Math.max(0, Math.min(mx - grabX, monitor.width - width));
+                    let newY = Math.max(0, Math.min(my - grabY, monitor.height - height));
+                    
+                    dragActor.set_position(newX, newY);
+                    return Clutter.EVENT_STOP;
+                });
+
+                this._releaseHandler = actor.connect('button-release-event', (dragActor, releaseEvent) => {
+                    if (releaseEvent.get_button() === 1) {
+                        let [newX, newY] = dragActor.get_position();
+                        this._settings.set_int('widget-x', newX);
+                        this._settings.set_int('widget-y', newY);
+                        if (this._dragGrab) {
+                            this._dragGrab.dismiss();
+                            this._dragGrab = null;
+                        }
+                        if (this._dragHandler) {
+                            dragActor.disconnect(this._dragHandler);
+                            this._dragHandler = null;
+                        }
+                        if (this._releaseHandler) {
+                            dragActor.disconnect(this._releaseHandler);
+                            this._releaseHandler = null;
+                        }
+                        return Clutter.EVENT_STOP;
+                    }
+                    return Clutter.EVENT_PROPAGATE;
+                });
+
+                return Clutter.EVENT_STOP;
+            }
+
+            if (event.get_button() === 3) {
+                this.openPreferences();
+                return Clutter.EVENT_STOP;
+            }
+
+            return Clutter.EVENT_PROPAGATE;
+        });
+    }
+
+    _buildIndicator() {
+        const isWidget = this._settings.get_boolean('is-widget');
+        const showSeconds = this._settings.get_boolean('show-seconds');
+        const showDate = this._settings.get_boolean('show-date');
+
+        this._clockLabel = new St.Label({
+            text: this._getPlaceholderText(showSeconds, showDate, isWidget),
+            y_align: Clutter.ActorAlign.CENTER,
+            x_align: Clutter.ActorAlign.CENTER,
+            x_expand: true,
+            y_expand: true,
+            style_class: 'reloj-lcd-label'
+        });
+
+        this._shadowLabel = new St.Label({
+            text: this._getPlaceholderText(showSeconds, showDate, isWidget),
+            y_align: Clutter.ActorAlign.CENTER,
+            x_align: Clutter.ActorAlign.CENTER,
+            x_expand: true,
+            y_expand: true,
+            style_class: 'reloj-lcd-shadow-label'
+        });
+
+        this._clockContainer = new St.Widget({
+            layout_manager: new Clutter.BinLayout(),
+            offscreen_redirect: Clutter.OffscreenRedirect.ALWAYS
+        });
+
+        this._clockContainer.add_child(this._shadowLabel);
+        this._clockContainer.add_child(this._clockLabel);
+        this._shadowLabel.set_reactive(false);
+        this._clockLabel.set_reactive(false);
+        this._clockContainer.set_child_above_sibling(this._clockLabel, this._shadowLabel);
+        this._clockLabel.show();
+
+        this._alarmDotShadow = new St.Widget({
+            reactive: false,
+            visible: false,
+            x_expand: false,
+            y_expand: false,
+            x_align: Clutter.ActorAlign.START,
+            y_align: Clutter.ActorAlign.START
+        });
+
+        this._alarmDot = new St.Widget({
+            style_class: 'reloj-lcd-alarm-dot',
+            reactive: false,
+            x_expand: false,
+            y_expand: false,
+            x_align: Clutter.ActorAlign.START,
+            y_align: Clutter.ActorAlign.START
+        });
+
+        this._alarmDotWrapper = new St.Widget({
+            layout_manager: new Clutter.BinLayout(),
+            reactive: false,
+            visible: false,
+            x_expand: false,
+            y_expand: false,
+            x_align: Clutter.ActorAlign.START,
+            y_align: Clutter.ActorAlign.CENTER
+        });
+        this._alarmDotWrapper.add_child(this._alarmDotShadow);
+        this._alarmDotWrapper.add_child(this._alarmDot);
+
+        this._container = new St.BoxLayout({
+            style_class: 'reloj-lcd-container',
+            vertical: false,
+            offscreen_redirect: Clutter.OffscreenRedirect.ALWAYS,
+            clip_to_allocation: true
+        });
+
+        this._container.add_child(this._alarmDotWrapper);
+        this._container.add_child(this._clockContainer);
+        this._updateAlarmDot();
+
+        if (isWidget) {
+            this._indicator = new St.Bin({
+                reactive: true,
+                can_focus: true,
+                track_hover: true,
+                x: this._settings.get_int('widget-x'),
+                y: this._settings.get_int('widget-y'),
+                style: 'opacity: 1.0; -st-shadow: none;'
+            });
+            this._indicator.set_child(this._container);
+            this._setupDragHandlers(this._indicator);
+            Main.layoutManager.addChrome(this._indicator);
+            this._isChromeIndicator = true;
+        } else {
+            this._isChromeIndicator = false;
+            const pos = this._settings.get_string('panel-position');
+            this._indicator = new PanelMenu.Button(0.5, 'RelojLCD', true);
+            this._container.y_align = Clutter.ActorAlign.CENTER;
+            this._container.y_expand = false;
+            this._indicator.add_child(this._container);
+
+            this._connect(this._indicator, 'button-press-event', (actor, event) => {
+                if (this._isAlarming) {
+                    this._stopAlarm();
+                    return Clutter.EVENT_STOP;
+                } else {
+                    this.openPreferences();
+                    return Clutter.EVENT_PROPAGATE;
+                }
+            });
+            Main.panel.addToStatusArea('relojlcd', this._indicator, 1, pos);
+        }
+
+        this._indicator.accessible_role = Atk.Role.PUSH_BUTTON;
+        this._alarmDotWrapper.accessible_role = Atk.Role.ICON;
+        this._alarmDotWrapper.accessible_name = _('Alarm active');
+
+        this._updateStyle();
+
+        const themeContext = St.ThemeContext.get_for_stage(global.stage);
+        this._themeContextId = themeContext.connect('changed', () => {
+            this._invalidateStyleCache();
+            this._updateStyle();
+        });
+
+        if (this._initTimeoutId) GLib.Source.remove(this._initTimeoutId);
+        this._initTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
+            this._updateClock();
+            this._updateFlicker();
+            this._initTimeoutId = null;
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    _updateClock() {
+        this._removeClockTimeout();
+
+        const update = () => {
+            if (!this._settings || !this._clockLabel) {
+                this._clockTimeoutId = null;
+                return GLib.SOURCE_REMOVE;
+            }
+
+            const now = GLib.DateTime.new_now_local();
+            const is24h = this._settings.get_boolean('clock-format-24h');
+            const showSeconds = this._settings.get_boolean('show-seconds');
+            const showDate = this._settings.get_boolean('show-date');
+            const isWidget = this._settings.get_boolean('is-widget');
+            const blink = this._settings.get_boolean('blink-dots');
+            const colorType = this._settings.get_string('clock-color');
+            const glow = this._settings.get_double('glow-intensity');
+
+            const timeStr = this._formatTime(now, is24h, showSeconds, showDate, isWidget, blink);
+
+            this._clockLabel.set_text(timeStr);
+            if (this._shadowLabel && colorType === 'gray' && glow >= 1) {
+                this._shadowLabel.set_text(timeStr);
+            }
+            this._clockLabel.queue_redraw();
+            this._shadowLabel?.queue_redraw();
+
+            if (this._indicator) {
+                this._indicator.accessible_name = this._formatAccessibleTime(now, is24h);
+            }
+
+            this._checkAlarm(now);
+            return GLib.SOURCE_CONTINUE;
+        };
+
+        update();
+
+        const blinkEnabled = this._settings.get_boolean('blink-dots');
+        const showSeconds = this._settings.get_boolean('show-seconds');
+        const interval = blinkEnabled ? 500 : (showSeconds ? 1000 : 10000);
+
+        this._clockTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, interval, update);
+    }
+
+    _formatTime(now, is24h, showSeconds, showDate, isWidget, blink) {
+        this._dotState = blink ? !this._dotState : true;
+        const sepChar = this._dotState ? ':' : ' ';
+        const sep = ` ${sepChar} `;
+
+        let timeStr;
+        if (showSeconds) {
+            const format = is24h ? `%H${sep}%M${sep}%S` : `%I${sep}%M${sep}%S %p`;
+            timeStr = now.format(format);
+        } else {
+            const format = is24h ? `%H${sep}%M` : `%I${sep}%M %p`;
+            timeStr = now.format(format);
+        }
+
+        if (showDate) {
+            const dateStr = now.format('%d-%m-%Y');
+            if (isWidget) {
+                timeStr = `${timeStr}\n${dateStr}`;
+            } else {
+                timeStr = `${timeStr}  --  ${dateStr}`;
+            }
+        }
+
+        return timeStr;
+    }
+
+    _formatAccessibleTime(now, is24h) {
+        const format = is24h ? '%H:%M' : '%I:%M %p';
+        return `${_('Retro LCD Clock')}, ${now.format(format)}`;
+    }
+
+    _updateAlarmDot() {
+        if (!this._alarmDotWrapper || !this._settings) return;
+        this._alarmDotWrapper.visible = this._alarms.some(alarm => alarm.enabled);
+    }
+
+    _disableOneTimeAlarm(alarm) {
+        alarm.enabled = false;
+        this._settings.set_string('alarms', JSON.stringify(this._alarms));
+        this._updateAlarmDot();
+    }
+
+    _checkAlarm(now) {
+        const previousCheckedTime = this._lastCheckedTime;
+        this._lastCheckedTime = now;
+
+        if (!this._alarms.length) return;
+
+        for (const alarm of this._alarms) {
+            if (!alarm.enabled) continue;
+
+            const hasDate = alarm.year !== undefined;
+            const target = hasDate
+                ? GLib.DateTime.new_local(alarm.year, alarm.month, alarm.day, alarm.hour, alarm.minute, 0)
+                : GLib.DateTime.new_local(now.get_year(), now.get_month(), now.get_day_of_month(), alarm.hour, alarm.minute, 0);
+
+            if (!target) continue;
+
+            const reachedTarget = previousCheckedTime
+                ? previousCheckedTime.compare(target) < 0 && now.compare(target) >= 0
+                : (hasDate
+                    ? now.get_year() === alarm.year && now.get_month() === alarm.month && now.get_day_of_month() === alarm.day &&
+                      now.get_hour() === alarm.hour && now.get_minute() === alarm.minute
+                    : now.get_hour() === alarm.hour && now.get_minute() === alarm.minute);
+
+            if (!reachedTarget) continue;
+
+            const stamp = `${now.get_year()}-${now.get_day_of_year()}-${alarm.hour}:${alarm.minute}`;
+            if (this._lastAlarmStamps.get(alarm.id) === stamp) continue;
+            this._lastAlarmStamps.set(alarm.id, stamp);
+
+            if (hasDate) this._disableOneTimeAlarm(alarm);
+
+            if (this._isAlarming) {
+                if (!this._pendingAlarms.some(pending => pending.id === alarm.id))
+                    this._pendingAlarms.push(alarm);
+            } else {
+                this._triggerAlarm(alarm);
+            }
+        }
+    }
+
+    _playAlarmSound(cancellable = this._alarmSoundCancellable) {
+        const alarmPath = this.path + '/assets/alarm.ogg';
+        const alarmFile = Gio.File.new_for_path(alarmPath);
+
+        if (!alarmFile.query_exists(null)) {
+            console.error('RelojLCD: Alarm sound file not found');
+            return;
+        }
+
+        try {
+            global.display.get_sound_player().play_from_file(alarmFile, 'Alarm clock', cancellable);
+        } catch (e) {
+            console.error('RelojLCD: Failed to play alarm sound', e);
+        }
+    }
+
+    _startTestSound() {
+        this._stopTestSound();
+        this._testSoundCancellable = new Gio.Cancellable();
+        this._playAlarmSound(this._testSoundCancellable);
+    }
+
+    _stopTestSound() {
+        if (this._testSoundCancellable) {
+            this._testSoundCancellable.cancel();
+            this._testSoundCancellable = null;
+        }
+    }
+
+    _triggerAlarm(alarm) {
+        this._isAlarming = true;
+        this._alarmSoundCancellable = new Gio.Cancellable();
+
+        this._showAlarmNotification(alarm);
+        this._playAlarmSound();
+
+        if (this._alarmSoundTimeoutId) GLib.Source.remove(this._alarmSoundTimeoutId);
+        this._alarmSoundTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 8130, () => {
+            this._playAlarmSound();
+            return GLib.SOURCE_CONTINUE;
+        });
+
+        if (this._blinkTimeoutId) GLib.Source.remove(this._blinkTimeoutId);
+        this._blinkTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+            this._alarmBlinkState = !this._alarmBlinkState;
+            const opacity = this._alarmBlinkState ? 255 : 40;
+            this._clockLabel.set_opacity(opacity);
+            this._alarmDotWrapper.set_opacity(opacity);
+            return GLib.SOURCE_CONTINUE;
+        });
+
+        if (this._alarmTimeoutId) GLib.Source.remove(this._alarmTimeoutId);
+        this._alarmTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 60000, () => {
+            this._stopAlarm();
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    _showAlarmNotification(alarm) {
+        const source = MessageTray.getSystemSource();
+        const notification = new MessageTray.Notification({
+            source,
+            title: _('Reloj LCD'),
+            body: alarm.label || _('Alarm'),
+            urgency: MessageTray.Urgency.CRITICAL
+        });
+
+        notification.addAction(_('Snooze'), () => this._snoozeAlarm(alarm));
+        notification.addAction(_('Dismiss'), () => this._stopAlarm());
+
+        const destroyHandlerId = notification.connect('destroy', () => {
+            notification.disconnect(destroyHandlerId);
+            if (this._activeNotification === notification)
+                this._activeNotification = null;
+        });
+
+        this._activeNotification = notification;
+        source.addNotification(notification);
+    }
+
+    _snoozeAlarm(alarm) {
+        this._stopAlarm();
+
+        const existingTimeoutId = this._snoozeTimeoutIds.get(alarm.id);
+        if (existingTimeoutId) GLib.Source.remove(existingTimeoutId);
+
+        const snoozeMinutes = this._settings.get_int('snooze-minutes');
+        const timeoutId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, snoozeMinutes * 60, () => {
+            this._snoozeTimeoutIds.delete(alarm.id);
+            this._triggerAlarm(alarm);
+            return GLib.SOURCE_REMOVE;
+        });
+        this._snoozeTimeoutIds.set(alarm.id, timeoutId);
+    }
+
+    _stopAlarm(triggerPending = true) {
+        this._isAlarming = false;
+
+        if (this._alarmSoundCancellable) {
+            this._alarmSoundCancellable.cancel();
+            this._alarmSoundCancellable = null;
+        }
+
+        if (this._alarmSoundTimeoutId) {
+            GLib.Source.remove(this._alarmSoundTimeoutId);
+            this._alarmSoundTimeoutId = null;
+        }
+
+        if (this._alarmTimeoutId) {
+            GLib.Source.remove(this._alarmTimeoutId);
+            this._alarmTimeoutId = null;
+        }
+
+        if (this._blinkTimeoutId) {
+            GLib.Source.remove(this._blinkTimeoutId);
+            this._blinkTimeoutId = null;
+        }
+
+        if (this._activeNotification) {
+            this._activeNotification.destroy();
+            this._activeNotification = null;
+        }
+
+        if (this._clockLabel) {
+            this._clockLabel.set_opacity(255);
+            this._invalidateStyleCache();
+            this._updateStyle();
+        }
+        if (this._alarmDotWrapper) {
+            this._alarmDotWrapper.set_opacity(255);
+        }
+        this._updateFlicker();
+
+        if (triggerPending && this._pendingAlarms.length) {
+            const nextAlarm = this._pendingAlarms.shift();
+            this._triggerAlarm(nextAlarm);
+        }
+    }
+
+    _updateStyle() {
+        if (!this._clockLabel || !this._shadowLabel || !this._settings) return;
+
+        const config = this._getStyleConfig();
+        const theme = this._getTheme(config.colorType);
+        const shadow = this._calculateShadow(config.colorType, config.glow, theme, config.fontSize);
+        
+        this._updateShadowLabelVisibility(config);
+        const containerStyle = this._buildContainerStyle(config, theme);
+        const clockStyle = this._buildClockStyle(config, theme);
+        const shadowStyle = this._buildShadowStyle(config, shadow);
+        
+        this._applyStyles(containerStyle, clockStyle, shadowStyle, theme, config, shadow);
+    }
+
+    _getStyleConfig() {
+        const showSeconds = this._settings.get_boolean('show-seconds');
+        const fontSize = this._settings.get_double('font-size');
+        const colorType = this._settings.get_string('clock-color');
+        const glow = this._settings.get_double('glow-intensity');
+        return {
+            fontSize: fontSize,
+            colorType: colorType,
+            glow: glow,
+            showSeconds: showSeconds,
+            showDate: this._settings.get_boolean('show-date'),
+            isWidget: this._settings.get_boolean('is-widget'),
+            fontStyle: this._settings.get_string('font-style'),
+            horizontalPadding: this._calculateHorizontalPadding(fontSize, showSeconds, glow, colorType)
+        };
+    }
+
+    _calculateSizeScale(fontSize) {
+        const baseFontSize = 1.8;
+        return Math.max(0.4, Math.min(2, fontSize / baseFontSize));
+    }
+
+    _calculateHorizontalPadding(fontSize, showSeconds, glow, colorType) {
+        const baseFontSize = 1.8;
+        const basePadding = showSeconds ? 16 : 24;
+        const minPadding = 6;
+        const maxPadding = 50;
+        const proportionalPadding = basePadding * (fontSize / baseFontSize);
+        const shadowSafetyMargin = this._calculateShadowExtent(glow, colorType, fontSize) + 4;
+        const padding = Math.max(proportionalPadding, shadowSafetyMargin);
+        return Math.max(minPadding, Math.min(maxPadding, padding));
+    }
+
+    _calculateRetroShadowOffset(glow, fontSize) {
+        const sizeScale = this._calculateSizeScale(fontSize);
+        const offsetPerGlowUnit = 1.2;
+        return glow * offsetPerGlowUnit * sizeScale;
+    }
+
+    _calculateShadowExtent(glow, colorType, fontSize) {
+        if (colorType === 'gray') {
+            return glow >= 1 ? this._calculateRetroShadowOffset(glow, fontSize) : 0;
+        }
+        const sizeScale = this._calculateSizeScale(fontSize);
+        if (glow <= 0) return 0;
+        const shadowOpacity = Math.min(1, glow / 8);
+        const shadowBlur = (2 + shadowOpacity * 10) * sizeScale;
+        return Math.max(4 * sizeScale, shadowBlur * 1.5);
+    }
+
+    _getTheme(colorType) {
+        if (colorType === 'custom') {
+            return buildCustomTheme(this._settings.get_string('custom-color'));
+        }
+        return THEME_MAP[colorType] || THEME_MAP.green;
+    }
+
+    _updateShadowLabelVisibility(config) {
+        if (!this._shadowLabel) return;
+        
+        const isRetro = config.colorType === 'gray';
+        if (isRetro && config.glow >= 1) {
+            this._shadowLabel.show();
+            this._shadowLabel.set_text(this._getPlaceholderText(config.showSeconds, config.showDate, config.isWidget));
+        } else {
+            this._shadowLabel.hide();
+        }
+    }
+
+    _buildContainerStyle(config, theme) {
+        const props = [
+            `background-color: ${theme.bg}`,
+            `border: 1px solid ${theme.border}`,
+            `border-radius: 8px`,
+            `box-shadow: ${this._calculateBoxShadow(config.colorType, config.glow, theme)}`,
+            `padding: 2px ${config.horizontalPadding.toFixed(1)}px`,
+            `position: relative`,
+            `z-index: 10`
+        ];
+        
+        if (config.showDate) {
+            props.push(`text-align: center`);
+            if (config.isWidget) {
+                props.push(`line-height: 1.2`);
+            }
+        }
+        
+        return props.join('; ') + ';';
+    }
+
+    _buildClockStyle(config, theme) {
+        const baseProps = this._buildBaseStyleProps(config);
+        const props = [...baseProps];
+        props.push(`color: ${theme.main}`);
+        props.push(`text-shadow: 0.5px 0 0 rgba(0, 0, 0, 0.05)`);
+        props.push(`-st-text-shadow: 0.5px 0 0 rgba(0, 0, 0, 0.05)`);
+        props.push(`z-index: 2`);
+        return props.join('; ') + ';';
+    }
+
+    _buildShadowStyle(config, shadow) {
+        const baseProps = this._buildBaseStyleProps(config);
+        const props = [...baseProps];
+        props.push(`color: rgba(0, 0, 0, 0.01)`);
+        props.push(`text-shadow: ${shadow}`);
+        props.push(`-st-text-shadow: ${shadow}`);
+        props.push(`z-index: 1`);
+        return props.join('; ') + ';';
+    }
+
+    _buildBaseStyleProps(config) {
+        let fontWeight = 'normal';
+        let cssFontStyle = 'normal';
+        
+        if (config.fontStyle === 'italic') {
+            cssFontStyle = 'italic';
+        } else if (config.fontStyle === 'bold') {
+            fontWeight = 'bold';
+        } else if (config.fontStyle === 'italic-bold') {
+            cssFontStyle = 'italic';
+            fontWeight = 'bold';
+        }
+        
+        return [
+            `font-family: 'DSEG7 Classic', monospace`,
+            `font-size: ${config.fontSize.toFixed(1)}em`,
+            `font-weight: ${fontWeight}`,
+            `font-style: ${cssFontStyle}`,
+            `overflow: visible`,
+            `-st-font-smoothing: enabled`,
+            `-st-text-rendering: optimizeSpeed`
+        ];
+    }
+
+    _calculateBoxShadow(colorType, glow, theme) {
+        if (colorType === 'gray' || glow <= 0) return 'none';
+        
+        const glowIntensity = glow / 10;
+        const withAlpha = (rgba, alpha) => rgba.replace(/[\d.]+\)$/, `${alpha})`);
+        const boxGlowColor = withAlpha(theme.glow, 0.1 + glowIntensity * 0.5);
+        const blurSize = 5 + glowIntensity * 35;
+        return `0 0 ${blurSize.toFixed(1)}px ${boxGlowColor}`;
+    }
+
+    _applyStyles(containerStyle, clockStyle, shadowStyle, theme, config, shadow) {
+        if (this._lastAppliedStyle === clockStyle && 
+            this._lastAppliedShadowStyle === shadowStyle && 
+            this._lastAppliedContainerStyle === containerStyle) {
+            return;
+        }
+        
+        this._lastAppliedStyle = clockStyle;
+        this._lastAppliedShadowStyle = shadowStyle;
+        this._lastAppliedContainerStyle = containerStyle;
+        
+        if (this._container) this._container.set_style(containerStyle);
+        this._clockLabel.set_style(clockStyle);
+        this._shadowLabel.set_style(shadowStyle);
+        this._clockLabel.queue_redraw();
+        this._shadowLabel.queue_redraw();
+        if (this._clockContainer) this._clockContainer.queue_redraw();
+        if (this._container) this._container.queue_redraw();
+        if (this._indicator) this._indicator.queue_redraw();
+        
+        if (this._alarmDot && this._alarmDotWrapper) {
+            this._updateAlarmDotAppearance(config, theme, shadow);
+        }
+    }
+
+    _updateAlarmDotAppearance(config, theme, shadow) {
+        const dotSize = this._calculateAlarmDotSize(config.fontSize);
+        const dotMargin = this._calculateAlarmDotMargin(dotSize);
+        const isRetro = config.colorType === 'gray';
+        const showGhostShadow = isRetro && config.glow >= 1;
+        const shadowOffset = showGhostShadow ? this._calculateRetroShadowOffset(config.glow, config.fontSize) : 0;
+
+        const dotGeometryStyle =
+            `width: ${dotSize.toFixed(1)}px;` +
+            `height: ${dotSize.toFixed(1)}px;` +
+            `min-width: ${dotSize.toFixed(1)}px;` +
+            `max-width: ${dotSize.toFixed(1)}px;` +
+            `min-height: ${dotSize.toFixed(1)}px;` +
+            `max-height: ${dotSize.toFixed(1)}px;` +
+            `border-radius: ${(dotSize / 2).toFixed(1)}px;`;
+
+        const glowShadow = isRetro ? 'none' : shadow;
+        this._alarmDot.set_style(
+            `background-color: ${theme.main};` +
+            `box-shadow: ${glowShadow};` +
+            dotGeometryStyle
+        );
+
+        if (showGhostShadow) {
+            this._alarmDotShadow.show();
+            this._alarmDotShadow.set_style(
+                `background-color: rgba(80, 80, 80, 0.6);` +
+                dotGeometryStyle +
+                `margin-left: ${shadowOffset.toFixed(1)}px;` +
+                `margin-top: ${shadowOffset.toFixed(1)}px;`
+            );
+        } else {
+            this._alarmDotShadow.hide();
+        }
+
+        this._alarmDotWrapper.set_style(`margin-right: ${dotMargin.toFixed(1)}px;`);
+    }
+
+    _calculateAlarmDotSize(fontSize) {
+        const baseFontSize = 1.8;
+        const baseDotSize = 7;
+        return Math.max(4, Math.min(14, baseDotSize * (fontSize / baseFontSize)));
+    }
+
+    _calculateAlarmDotMargin(dotSize) {
+        const baseDotSize = 7;
+        const baseDotMargin = 6;
+        return (dotSize / baseDotSize) * baseDotMargin;
+    }
+
+    _calculateShadow(colorType, glow, theme, fontSize) {
+        if (colorType === 'gray' && glow >= 1) {
+            const shadowOffset = this._calculateShadowExtent(glow, colorType, fontSize);
+            return `${shadowOffset.toFixed(1)}px ${shadowOffset.toFixed(1)}px 0 rgba(80, 80, 80, 0.6)`;
+        }
+        
+        if (glow > 0) {
+            const sizeScale = this._calculateSizeScale(fontSize);
+            const shadowOpacity = Math.min(1, glow / 8);
+            const shadowBlur = (2 + shadowOpacity * 10) * sizeScale;
+            const maxBlur = this._calculateShadowExtent(glow, colorType, fontSize);
+            return `0 0 ${shadowBlur.toFixed(1)}px ${theme.glow}, 0 0 ${maxBlur.toFixed(1)}px ${theme.glow}`;
+        }
+        
+        return 'none';
+    }
+
+    _getPlaceholderText(showSeconds, showDate, isWidget) {
+        let timeText = showSeconds ? '88 : 88 : 88' : '88 : 88';
+        if (showDate) {
+            if (isWidget) {
+                timeText += '\n88-88-8888';
+            } else {
+                timeText += '  --  88-88-8888';
+            }
+        }
+        return timeText;
+    }
+}

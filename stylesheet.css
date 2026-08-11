@@ -1,0 +1,35 @@
+
+.reloj-lcd-label {
+    font-family: 'DSEG7 Classic', monospace;
+    margin: 0 4px;
+    text-rendering: optimizeSpeed;
+    font-smooth: always;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: 0;
+    line-height: 1;
+}
+
+.reloj-lcd-shadow-label {
+    font-family: 'DSEG7 Classic', monospace;
+    margin: 0 4px;
+    text-rendering: optimizeSpeed;
+    font-smooth: always;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: 0;
+    line-height: 1;
+}
+
+.reloj-lcd-container {
+    position: relative;
+    z-index: 999999;
+    -st-shadow: none;
+    paint-order: normal;
+}
+
+.reloj-lcd-alarm-dot {
+    flex-shrink: 0;
+    flex-grow: 0;
+    align-self: center;
+}

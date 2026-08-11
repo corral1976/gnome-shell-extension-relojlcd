@@ -1,0 +1,765 @@
+import { ExtensionPreferences, gettext as _ } from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
+import Adw from 'gi://Adw';
+import Gtk from 'gi://Gtk';
+import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
+import Gdk from 'gi://Gdk';
+import { isValidHex, hexToRgba } from './colorUtils.js';
+
+const PREVIEW_MAX_FONT_SIZE = 4;
+const PREVIEW_BASE_FONT_PT = 11;
+
+const PRESET_COLORS = {
+    green: '#00ff00',
+    amber: '#ffb000',
+    gray: '#1a1a1a',
+    ruby: '#ff5555',
+    sapphire: '#0088ff',
+    white: '#ffffff',
+    violet: '#8b5cf6',
+    gold: '#ffd700'
+};
+
+function hexTo01(hex) {
+    const clean = hex.replace('#', '');
+    return {
+        r: parseInt(clean.substring(0, 2), 16) / 255,
+        g: parseInt(clean.substring(2, 4), 16) / 255,
+        b: parseInt(clean.substring(4, 6), 16) / 255
+    };
+}
+
+function rgbaStringTo01(str) {
+    const match = str.match(/rgba?\(([^)]+)\)/);
+    const parts = match[1].split(',').map(v => parseFloat(v.trim()));
+    return { r: parts[0] / 255, g: parts[1] / 255, b: parts[2] / 255, a: parts[3] ?? 1 };
+}
+
+function getPreviewColors(colorType, customHex) {
+    if (colorType === 'gray') {
+        return { main: '#1a1a1a', border: '#6a8a5a', bg: 'rgba(120, 150, 100, 0.95)' };
+    }
+    const base = colorType === 'custom'
+        ? (isValidHex(customHex) ? customHex : '#00ff00')
+        : (PRESET_COLORS[colorType] || PRESET_COLORS.green);
+    return { main: base, border: base, bg: hexToRgba(base, 0.2), glow: hexToRgba(base, 0.8) };
+}
+
+function calculateSizeScale(fontSize) {
+    const baseFontSize = 1.8;
+    return Math.max(0.4, Math.min(2, fontSize / baseFontSize));
+}
+
+function calculateAlarmDotDiameter(fontSize) {
+    const baseFontSize = 1.8;
+    const baseDotSize = 7;
+    return Math.max(4, Math.min(14, baseDotSize * (fontSize / baseFontSize)));
+}
+
+function calculateRetroShadowOffset(glow, fontSize) {
+    const sizeScale = calculateSizeScale(fontSize);
+    const offsetPerGlowUnit = 1.2;
+    return glow * offsetPerGlowUnit * sizeScale;
+}
+
+function calculateDigitShadow(colorType, glow, colors, fontSize) {
+    const sizeScale = calculateSizeScale(fontSize);
+    if (colorType === 'gray' && glow >= 1) {
+        const shadowOffset = calculateRetroShadowOffset(glow, fontSize);
+        return `${shadowOffset.toFixed(1)}px ${shadowOffset.toFixed(1)}px 0 rgba(80, 80, 80, 0.6)`;
+    }
+    if (glow > 0) {
+        const shadowOpacity = Math.min(1, glow / 8);
+        const shadowBlur = (2 + shadowOpacity * 10) * sizeScale;
+        const maxBlur = Math.max(4 * sizeScale, shadowBlur * 1.5);
+        return `0 0 ${shadowBlur.toFixed(1)}px ${colors.glow}, 0 0 ${maxBlur.toFixed(1)}px ${colors.glow}`;
+    }
+    return 'none';
+}
+
+function drawClockPreview(cr, width, height, colors, glowValue, isRetro, fontSize, showAlarmDot) {
+    const radius = 10;
+    const roundedRect = (x, y, w, h, r) => {
+        cr.newSubPath();
+        cr.arc(x + w - r, y + r, r, -Math.PI / 2, 0);
+        cr.arc(x + w - r, y + h - r, r, 0, Math.PI / 2);
+        cr.arc(x + r, y + h - r, r, Math.PI / 2, Math.PI);
+        cr.arc(x + r, y + r, r, Math.PI, 3 * Math.PI / 2);
+        cr.closePath();
+    };
+
+    const bg = rgbaStringTo01(colors.bg);
+    roundedRect(4, 4, width - 8, height - 8, radius);
+    cr.setSourceRGBA(bg.r, bg.g, bg.b, bg.a);
+    cr.fillPreserve();
+
+    const border = hexTo01(colors.border);
+    cr.setSourceRGBA(border.r, border.g, border.b, 1);
+    cr.setLineWidth(1.5);
+    cr.stroke();
+
+    if (glowValue > 0 && !isRetro) {
+        const glow = hexTo01(colors.main);
+        const steps = 4;
+        for (let i = steps; i >= 1; i--) {
+            const alpha = (glowValue / 10) * 0.15 * (i / steps);
+            roundedRect(4 - i * 1.5, 4 - i * 1.5, width - 8 + i * 3, height - 8 + i * 3, radius + i);
+            cr.setSourceRGBA(glow.r, glow.g, glow.b, alpha);
+            cr.setLineWidth(2);
+            cr.stroke();
+        }
+    }
+
+    if (showAlarmDot) {
+        const main = hexTo01(colors.main);
+        const dotDiameter = calculateAlarmDotDiameter(fontSize);
+        const dotRadius = dotDiameter / 2;
+        const cx = 16;
+        const cy = height / 2;
+
+        if (isRetro && glowValue >= 1) {
+            const shadowOffset = calculateRetroShadowOffset(glowValue, fontSize);
+            cr.arc(cx + shadowOffset, cy + shadowOffset, dotRadius, 0, 2 * Math.PI);
+            cr.setSourceRGBA(80 / 255, 80 / 255, 80 / 255, 0.6);
+            cr.fill();
+        }
+
+        if (!isRetro && glowValue > 0) {
+            const glow = hexTo01(colors.main);
+            const steps = 4;
+            for (let i = steps; i >= 1; i--) {
+                const alpha = (glowValue / 10) * 0.2 * (i / steps);
+                cr.arc(cx, cy, dotRadius + i * 1.5, 0, 2 * Math.PI);
+                cr.setSourceRGBA(glow.r, glow.g, glow.b, alpha);
+                cr.fill();
+            }
+        }
+
+        cr.arc(cx, cy, dotRadius, 0, 2 * Math.PI);
+        cr.setSourceRGBA(main.r, main.g, main.b, 1);
+        cr.fill();
+    }
+}
+
+function parseAlarms(raw) {
+    let parsed;
+    try {
+        parsed = JSON.parse(raw);
+    } catch (e) {
+        parsed = [];
+    }
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(alarm => alarm && typeof alarm.id === 'string');
+}
+
+function fontNeedsUpdate(sourceFile, destFile) {
+    try {
+        const sourceInfo = sourceFile.query_info('standard::size,time::modified', Gio.FileQueryInfoFlags.NONE, null);
+        const destInfo = destFile.query_info('standard::size,time::modified', Gio.FileQueryInfoFlags.NONE, null);
+
+        if (sourceInfo.get_size() !== destInfo.get_size())
+            return true;
+
+        return sourceInfo.get_modification_date_time().compare(destInfo.get_modification_date_time()) > 0;
+    } catch (e) {
+        return true;
+    }
+}
+
+function installPreviewFonts(extensionPath) {
+    const filenames = ['DSEG7Classic-Regular.ttf'];
+    const fontsDirPath = GLib.build_filenamev([GLib.get_user_data_dir(), 'fonts']);
+    const fontsDir = Gio.File.new_for_path(fontsDirPath);
+
+    try {
+        if (!fontsDir.query_exists(null))
+            fontsDir.make_directory_with_parents(null);
+    } catch (e) {
+        return false;
+    }
+
+    let anyInstalled = false;
+    for (const filename of filenames) {
+        try {
+            const sourceFile = Gio.File.new_for_path(GLib.build_filenamev([extensionPath, 'assets', filename]));
+            if (!sourceFile.query_exists(null))
+                continue;
+
+            const destFile = fontsDir.get_child(filename);
+            if (!destFile.query_exists(null) || fontNeedsUpdate(sourceFile, destFile))
+                sourceFile.copy(destFile, Gio.FileCopyFlags.OVERWRITE, null, null);
+            anyInstalled = true;
+        } catch (e) {
+            continue;
+        }
+    }
+    return anyInstalled;
+}
+
+export default class RelojLCDPreferences extends ExtensionPreferences {
+    fillPreferencesWindow(window) {
+        const settings = this.getSettings();
+        const page = new Adw.PreferencesPage();
+
+        const previewFontOk = installPreviewFonts(this.path);
+        const previewFontFamily = previewFontOk ? 'DSEG7 Classic' : 'Monospace';
+
+        const dateGroup = new Adw.PreferencesGroup({
+            title: _('Current Date')
+        });
+        page.add(dateGroup);
+
+        const dateLabel = new Gtk.Label({
+            label: GLib.DateTime.new_now_local().format('%A, %d %B %Y'),
+            halign: Gtk.Align.CENTER,
+            margin_top: 4,
+            margin_bottom: 10,
+            css_classes: ['title-2']
+        });
+        dateGroup.add(dateLabel);
+
+        const displayGroup = new Adw.PreferencesGroup({
+            title: _('Visual Appearance'),
+            description: _('Customize the clock display and colors')
+        });
+        page.add(displayGroup);
+
+        const widgetRow = new Adw.ActionRow({
+            title: _('Desktop Widget Mode'),
+            subtitle: _('Show clock on desktop instead of the top bar')
+        });
+        const widgetSwitch = new Gtk.Switch({
+            active: settings.get_boolean('is-widget'),
+            valign: Gtk.Align.CENTER
+        });
+        widgetSwitch.connect('notify::active', (w) => {
+            settings.set_boolean('is-widget', w.active);
+        });
+        widgetRow.add_suffix(widgetSwitch);
+        displayGroup.add(widgetRow);
+
+        const formatRow = new Adw.ActionRow({
+            title: _('24-Hour Format'),
+            subtitle: _('Display time in 24-hour format instead of AM/PM')
+        });
+        const formatSwitch = new Gtk.Switch({
+            active: settings.get_boolean('clock-format-24h'),
+            valign: Gtk.Align.CENTER
+        });
+        formatSwitch.connect('notify::active', (w) => {
+            settings.set_boolean('clock-format-24h', w.active);
+        });
+        formatRow.add_suffix(formatSwitch);
+        displayGroup.add(formatRow);
+
+        const secondsRow = new Adw.ActionRow({
+            title: _('Show Seconds'),
+            subtitle: _('Display seconds in the time display')
+        });
+        const secondsSwitch = new Gtk.Switch({
+            active: settings.get_boolean('show-seconds'),
+            valign: Gtk.Align.CENTER
+        });
+        secondsSwitch.connect('notify::active', (w) => {
+            settings.set_boolean('show-seconds', w.active);
+        });
+        secondsRow.add_suffix(secondsSwitch);
+        displayGroup.add(secondsRow);
+
+        const dateRow = new Adw.ActionRow({
+            title: _('Show Date'),
+            subtitle: _('Display current date below the time')
+        });
+        const dateSwitch = new Gtk.Switch({
+            active: settings.get_boolean('show-date'),
+            valign: Gtk.Align.CENTER
+        });
+        dateSwitch.connect('notify::active', (w) => {
+            settings.set_boolean('show-date', w.active);
+        });
+        dateRow.add_suffix(dateSwitch);
+        displayGroup.add(dateRow);
+
+        const blinkRow = new Adw.ActionRow({
+            title: _('Blinking Separators'),
+            subtitle: _('Make the time separators blink for classic LCD effect')
+        });
+        const blinkSwitch = new Gtk.Switch({
+            active: settings.get_boolean('blink-dots'),
+            valign: Gtk.Align.CENTER
+        });
+        blinkSwitch.connect('notify::active', (w) => {
+            settings.set_boolean('blink-dots', w.active);
+        });
+        blinkRow.add_suffix(blinkSwitch);
+        displayGroup.add(blinkRow);
+
+        const flickerRow = new Adw.ActionRow({
+            title: _('Flicker Effect'),
+            subtitle: _('Add subtle random flicker for vintage LCD display feel')
+        });
+        const flickerSwitch = new Gtk.Switch({
+            active: settings.get_boolean('flicker-enabled'),
+            valign: Gtk.Align.CENTER
+        });
+        flickerSwitch.connect('notify::active', (w) => {
+            settings.set_boolean('flicker-enabled', w.active);
+        });
+        flickerRow.add_suffix(flickerSwitch);
+        displayGroup.add(flickerRow);
+
+        const fontRow = new Adw.ActionRow({
+            title: _('Font Size'),
+            subtitle: _('Adjust the clock display size')
+        });
+        const fontSpin = new Gtk.SpinButton({
+            adjustment: new Gtk.Adjustment({ lower: 1.0, upper: 10.0, step_increment: 0.1, value: settings.get_double('font-size') }),
+            digits: 1,
+            valign: Gtk.Align.CENTER
+        });
+        fontSpin.connect('value-changed', (w) => {
+            const size = Math.round(w.get_value() * 10) / 10;
+            settings.set_double('font-size', size);
+            updatePreviewLabel();
+        });
+        fontRow.add_suffix(fontSpin);
+        displayGroup.add(fontRow);
+
+        const fontStyleKeys = ['regular', 'italic', 'bold', 'italic-bold'];
+        const fontStyleRow = new Adw.ComboRow({
+            title: _('Font Style'),
+            subtitle: _('Choose the font style (synthetic bold/italic by Pango)'),
+            model: new Gtk.StringList({ strings: [_('Regular'), _('Italic'), _('Bold'), _('Italic Bold')] }),
+            selected: fontStyleKeys.indexOf(settings.get_string('font-style'))
+        });
+        fontStyleRow.connect('notify::selected', (w) => {
+            const style = fontStyleKeys[w.selected];
+            settings.set_string('font-style', style);
+            updatePreviewLabel();
+        });
+        displayGroup.add(fontStyleRow);
+
+        const colorKeys = ['green', 'amber', 'gray', 'ruby', 'sapphire', 'white', 'violet', 'gold', 'custom'];
+
+        const previewArea = new Gtk.DrawingArea({
+            content_width: 260,
+            content_height: 80,
+            halign: Gtk.Align.CENTER
+        });
+        previewArea.set_draw_func((area, cr, width, height) => {
+            const colorType = settings.get_string('clock-color');
+            const colors = getPreviewColors(colorType, settings.get_string('custom-color'));
+            const previewFontSize = Math.min(settings.get_double('font-size'), PREVIEW_MAX_FONT_SIZE);
+            const hasEnabledAlarm = parseAlarms(settings.get_string('alarms')).some(alarm => alarm.enabled);
+            drawClockPreview(cr, width, height, colors, settings.get_double('glow-intensity'), colorType === 'gray', previewFontSize, hasEnabledAlarm);
+        });
+
+        const previewLabel = new Gtk.Label({
+            halign: Gtk.Align.CENTER,
+            valign: Gtk.Align.CENTER
+        });
+        const previewLabelCss = new Gtk.CssProvider();
+        previewLabel.get_style_context().add_provider(previewLabelCss, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);
+
+        const previewOverlay = new Gtk.Overlay({
+            halign: Gtk.Align.CENTER,
+            margin_top: 6,
+            margin_bottom: 6
+        });
+        previewOverlay.set_child(previewArea);
+        previewOverlay.add_overlay(previewLabel);
+
+        const updatePreviewLabel = () => {
+            const colorType = settings.get_string('clock-color');
+            const colors = getPreviewColors(colorType, settings.get_string('custom-color'));
+            const fontSize = Math.min(settings.get_double('font-size'), PREVIEW_MAX_FONT_SIZE);
+            const sizePt = Math.round(PREVIEW_BASE_FONT_PT * fontSize * 1024);
+            const fontStyle = settings.get_string('font-style');
+            let pangoWeight = 'normal';
+            let pangoStyle = 'normal';
+            if (fontStyle === 'italic') {
+                pangoStyle = 'italic';
+            } else if (fontStyle === 'bold') {
+                pangoWeight = 'bold';
+            } else if (fontStyle === 'italic-bold') {
+                pangoStyle = 'italic';
+                pangoWeight = 'bold';
+            }
+            previewLabel.set_markup(
+                `<span font_family="${previewFontFamily}" size="${sizePt}" style="${pangoStyle}" weight="${pangoWeight}" foreground="${colors.main}">88:88</span>`
+            );
+            const digitShadow = calculateDigitShadow(colorType, settings.get_double('glow-intensity'), colors, fontSize);
+            previewLabelCss.load_from_string(`label { text-shadow: ${digitShadow}; }`);
+
+            const [, naturalWidth] = previewLabel.measure(Gtk.Orientation.HORIZONTAL, -1);
+            const [, naturalHeight] = previewLabel.measure(Gtk.Orientation.VERTICAL, -1);
+            previewArea.set_content_width(naturalWidth + 56);
+            previewArea.set_content_height(naturalHeight + 24);
+            previewArea.queue_draw();
+        };
+        updatePreviewLabel();
+
+        const previewRow = new Adw.PreferencesGroup({ description: _('Live preview') });
+        previewRow.add(previewOverlay);
+        displayGroup.add(previewRow);
+
+        const colorRow = new Adw.ComboRow({
+            title: _('Color Theme'),
+            subtitle: _('Choose your preferred LCD color style'),
+            model: new Gtk.StringList({ strings: [_('Neon Green'), _('Vintage Amber'), _('Retro LCD'), _('Red Ruby'), _('Blue Sapphire'), _('White LED'), _('Violet Purple'), _('Gold'), _('Custom Color')] }),
+            selected: colorKeys.indexOf(settings.get_string('clock-color'))
+        });
+        displayGroup.add(colorRow);
+
+        const customColorRow = new Adw.ActionRow({
+            title: _('Custom Color'),
+            subtitle: _('Applies to digits, separators, alarm dot and border')
+        });
+        const initialRgba = new Gdk.RGBA();
+        initialRgba.parse(isValidHex(settings.get_string('custom-color')) ? settings.get_string('custom-color') : '#00ff00');
+        const colorButton = new Gtk.ColorButton({
+            rgba: initialRgba,
+            use_alpha: false,
+            valign: Gtk.Align.CENTER
+        });
+        colorButton.connect('color-set', (w) => {
+            const rgba = w.get_rgba();
+            const hex = '#' + [rgba.red, rgba.green, rgba.blue]
+                .map(v => Math.round(v * 255).toString(16).padStart(2, '0'))
+                .join('');
+            settings.set_string('custom-color', hex);
+            previewArea.queue_draw();
+            updatePreviewLabel();
+        });
+        customColorRow.add_suffix(colorButton);
+        customColorRow.set_visible(settings.get_string('clock-color') === 'custom');
+        displayGroup.add(customColorRow);
+
+        colorRow.connect('notify::selected', (w) => {
+            const color = colorKeys[w.selected];
+            settings.set_string('clock-color', color);
+            customColorRow.set_visible(color === 'custom');
+            updateGlowLimit(color);
+            previewArea.queue_draw();
+            updatePreviewLabel();
+        });
+
+        const glowAdjustment = new Gtk.Adjustment({ lower: 0, upper: 10, step_increment: 1, value: settings.get_double('glow-intensity') });
+        const glowRow = new Adw.ActionRow({
+            title: _('Glow / Shadow Intensity'),
+            subtitle: _('Control glow for colored themes or shadow strength for Retro LCD')
+        });
+        const glowSpin = new Gtk.SpinButton({
+            adjustment: glowAdjustment,
+            digits: 0,
+            valign: Gtk.Align.CENTER
+        });
+
+        const updateGlowLimit = (color) => {
+            const isRetro = color === 'gray';
+            glowAdjustment.set_upper(isRetro ? 5 : 10);
+            if (isRetro && glowAdjustment.get_value() > 5) {
+                glowAdjustment.set_value(5);
+                settings.set_double('glow-intensity', 5);
+            }
+        };
+
+        updateGlowLimit(settings.get_string('clock-color'));
+
+        glowSpin.connect('value-changed', (w) => {
+            const intensity = Math.floor(w.get_value());
+            settings.set_double('glow-intensity', intensity);
+            updatePreviewLabel();
+        });
+        glowRow.add_suffix(glowSpin);
+        displayGroup.add(glowRow);
+
+        const positionRow = new Adw.ComboRow({
+            title: _('Panel Position'),
+            subtitle: _('Choose where the clock appears on the panel'),
+            model: new Gtk.StringList({ strings: [_('Left'), _('Center'), _('Right')] }),
+            selected: ['left', 'center', 'right'].indexOf(settings.get_string('panel-position'))
+        });
+        positionRow.connect('notify::selected', (w) => {
+            const positions = ['left', 'center', 'right'];
+            settings.set_string('panel-position', positions[w.selected]);
+        });
+        displayGroup.add(positionRow);
+
+        const alarmGroup = new Adw.PreferencesGroup({
+            title: _('Alarms'),
+            description: _('Add one or more alarms; each one can be snoozed independently')
+        });
+        page.add(alarmGroup);
+
+        let alarms = parseAlarms(settings.get_string('alarms'));
+        const saveAlarms = () => {
+            settings.set_string('alarms', JSON.stringify(alarms));
+            previewArea.queue_draw();
+        };
+
+        const hasSpecificDate = (alarm) => alarm.year !== undefined && alarm.month !== undefined && alarm.day !== undefined;
+
+        const formatAlarmSubtitle = (alarm) => {
+            const time = `${String(alarm.hour).padStart(2, '0')}:${String(alarm.minute).padStart(2, '0')}`;
+            if (hasSpecificDate(alarm)) {
+                const date = `${String(alarm.day).padStart(2, '0')}-${String(alarm.month).padStart(2, '0')}-${alarm.year}`;
+                return `${time}  ·  ${date}`;
+            }
+            return `${time}  ·  ${_('Every day')}`;
+        };
+
+        const addAlarmButtonRow = new Adw.ActionRow({ title: _('Add New Alarm') });
+        const addAlarmButton = new Gtk.Button({
+            icon_name: 'list-add-symbolic',
+            valign: Gtk.Align.CENTER
+        });
+        addAlarmButtonRow.add_suffix(addAlarmButton);
+        addAlarmButtonRow.set_activatable_widget(addAlarmButton);
+
+        const buildAlarmRow = (alarm) => {
+            const row = new Adw.ExpanderRow({
+                title: alarm.label || _('Alarm'),
+                subtitle: formatAlarmSubtitle(alarm)
+            });
+
+            const enabledSwitch = new Gtk.Switch({
+                active: alarm.enabled,
+                valign: Gtk.Align.CENTER
+            });
+            enabledSwitch.connect('notify::active', (w) => {
+                alarm.enabled = w.active;
+                saveAlarms();
+            });
+            row.add_prefix(enabledSwitch);
+
+            const timeRow = new Adw.ActionRow({ title: _('Time') });
+            const hourSpin = new Gtk.SpinButton({
+                adjustment: new Gtk.Adjustment({ lower: 0, upper: 23, step_increment: 1, value: alarm.hour }),
+                valign: Gtk.Align.CENTER,
+                wrap: true
+            });
+            const minuteSpin = new Gtk.SpinButton({
+                adjustment: new Gtk.Adjustment({ lower: 0, upper: 59, step_increment: 1, value: alarm.minute }),
+                valign: Gtk.Align.CENTER,
+                wrap: true
+            });
+            hourSpin.connect('value-changed', (w) => {
+                alarm.hour = Math.floor(w.get_value());
+                row.set_subtitle(formatAlarmSubtitle(alarm));
+                saveAlarms();
+            });
+            minuteSpin.connect('value-changed', (w) => {
+                alarm.minute = Math.floor(w.get_value());
+                row.set_subtitle(formatAlarmSubtitle(alarm));
+                saveAlarms();
+            });
+            timeRow.add_suffix(hourSpin);
+            timeRow.add_suffix(new Gtk.Label({ label: ' : ' }));
+            timeRow.add_suffix(minuteSpin);
+            row.add_row(timeRow);
+
+            const today = GLib.DateTime.new_now_local();
+
+            const specificDateRow = new Adw.ActionRow({
+                title: _('Specific Date'),
+                subtitle: _('Ring once on a chosen date instead of every day')
+            });
+            const specificDateSwitch = new Gtk.Switch({
+                active: hasSpecificDate(alarm),
+                valign: Gtk.Align.CENTER
+            });
+            specificDateRow.add_suffix(specificDateSwitch);
+            row.add_row(specificDateRow);
+
+            const dateRow = new Adw.ActionRow({ title: _('Date') });
+            const daySpin = new Gtk.SpinButton({
+                adjustment: new Gtk.Adjustment({ lower: 1, upper: 31, step_increment: 1, value: alarm.day || today.get_day_of_month() }),
+                valign: Gtk.Align.CENTER,
+                wrap: true
+            });
+            const monthSpin = new Gtk.SpinButton({
+                adjustment: new Gtk.Adjustment({ lower: 1, upper: 12, step_increment: 1, value: alarm.month || today.get_month() }),
+                valign: Gtk.Align.CENTER,
+                wrap: true
+            });
+            const yearSpin = new Gtk.SpinButton({
+                adjustment: new Gtk.Adjustment({ lower: today.get_year(), upper: today.get_year() + 20, step_increment: 1, value: alarm.year || today.get_year() }),
+                valign: Gtk.Align.CENTER
+            });
+            dateRow.add_suffix(daySpin);
+            dateRow.add_suffix(new Gtk.Label({ label: '/' }));
+            dateRow.add_suffix(monthSpin);
+            dateRow.add_suffix(new Gtk.Label({ label: '/' }));
+            dateRow.add_suffix(yearSpin);
+            dateRow.set_visible(specificDateSwitch.active);
+            row.add_row(dateRow);
+
+            const applyDate = () => {
+                if (specificDateSwitch.active) {
+                    alarm.day = Math.floor(daySpin.get_value());
+                    alarm.month = Math.floor(monthSpin.get_value());
+                    alarm.year = Math.floor(yearSpin.get_value());
+                } else {
+                    delete alarm.day;
+                    delete alarm.month;
+                    delete alarm.year;
+                }
+                row.set_subtitle(formatAlarmSubtitle(alarm));
+                saveAlarms();
+            };
+
+            specificDateSwitch.connect('notify::active', (w) => {
+                dateRow.set_visible(w.active);
+                applyDate();
+            });
+            daySpin.connect('value-changed', applyDate);
+            monthSpin.connect('value-changed', applyDate);
+            yearSpin.connect('value-changed', applyDate);
+
+            const labelRow = new Adw.EntryRow({
+                title: _('Label'),
+                text: alarm.label
+            });
+            labelRow.connect('changed', (w) => {
+                alarm.label = w.get_text();
+                row.set_title(alarm.label || _('Alarm'));
+                saveAlarms();
+            });
+            row.add_row(labelRow);
+
+            const deleteRow = new Adw.ActionRow({ title: _('Remove This Alarm') });
+            const deleteButton = new Gtk.Button({
+                icon_name: 'user-trash-symbolic',
+                valign: Gtk.Align.CENTER,
+                css_classes: ['destructive-action']
+            });
+            deleteButton.connect('clicked', () => {
+                alarms = alarms.filter(existing => existing.id !== alarm.id);
+                saveAlarms();
+                alarmGroup.remove(row);
+            });
+            deleteRow.add_suffix(deleteButton);
+            deleteRow.set_activatable_widget(deleteButton);
+            row.add_row(deleteRow);
+
+            return row;
+        };
+
+        for (const alarm of alarms) alarmGroup.add(buildAlarmRow(alarm));
+
+        addAlarmButton.connect('clicked', () => {
+            const alarm = { id: GLib.uuid_string_random(), hour: 8, minute: 0, enabled: true, label: _('Alarm') };
+            alarms.push(alarm);
+            saveAlarms();
+            alarmGroup.remove(addAlarmButtonRow);
+            alarmGroup.add(buildAlarmRow(alarm));
+            alarmGroup.add(addAlarmButtonRow);
+        });
+
+        alarmGroup.add(addAlarmButtonRow);
+
+        const testSoundRow = new Adw.ActionRow({
+            title: _('Test Alarm Sound'),
+            subtitle: _('Play or stop the alarm sound to preview it')
+        });
+        const testSoundButton = new Gtk.Button({
+            icon_name: 'media-playback-start-symbolic',
+            valign: Gtk.Align.CENTER
+        });
+
+        let isTestSoundPlaying = false;
+        let testSoundTimeoutId = null;
+
+        const setTestSoundPlaying = (playing) => {
+            isTestSoundPlaying = playing;
+            testSoundButton.set_icon_name(playing ? 'media-playback-stop-symbolic' : 'media-playback-start-symbolic');
+        };
+
+        testSoundButton.connect('clicked', () => {
+            if (isTestSoundPlaying) {
+                if (testSoundTimeoutId) {
+                    GLib.Source.remove(testSoundTimeoutId);
+                    testSoundTimeoutId = null;
+                }
+                settings.set_int('test-alarm-stop-counter', settings.get_int('test-alarm-stop-counter') + 1);
+                setTestSoundPlaying(false);
+            } else {
+                settings.set_int('test-alarm-counter', settings.get_int('test-alarm-counter') + 1);
+                setTestSoundPlaying(true);
+                testSoundTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 8200, () => {
+                    testSoundTimeoutId = null;
+                    setTestSoundPlaying(false);
+                    return GLib.SOURCE_REMOVE;
+                });
+            }
+        });
+        testSoundRow.add_suffix(testSoundButton);
+        testSoundRow.set_activatable_widget(testSoundButton);
+        alarmGroup.add(testSoundRow);
+
+        window.connect('close-request', () => {
+            if (testSoundTimeoutId) {
+                GLib.Source.remove(testSoundTimeoutId);
+                testSoundTimeoutId = null;
+            }
+            if (isTestSoundPlaying) {
+                settings.set_int('test-alarm-stop-counter', settings.get_int('test-alarm-stop-counter') + 1);
+            }
+            return false;
+        });
+
+        const snoozeRow = new Adw.ActionRow({
+            title: _('Snooze Duration'),
+            subtitle: _('Minutes to wait before a snoozed alarm rings again')
+        });
+        const snoozeSpin = new Gtk.SpinButton({
+            adjustment: new Gtk.Adjustment({ lower: 1, upper: 60, step_increment: 1, value: settings.get_int('snooze-minutes') }),
+            valign: Gtk.Align.CENTER
+        });
+        snoozeSpin.connect('value-changed', (w) => {
+            settings.set_int('snooze-minutes', Math.floor(w.get_value()));
+        });
+        snoozeRow.add_suffix(snoozeSpin);
+        alarmGroup.add(snoozeRow);
+
+        const aboutGroup = new Adw.PreferencesGroup({
+            title: _('About'),
+            description: _('Information and credits')
+        });
+        page.add(aboutGroup);
+
+        const versionRow = new Adw.ActionRow({
+            title: _('Version'),
+            subtitle: `${this.metadata.name} v${this.metadata.version}`
+        });
+        versionRow.set_sensitive(false);
+        aboutGroup.add(versionRow);
+
+        const authorRow = new Adw.ActionRow({
+            title: _('Author'),
+            subtitle: 'Carlos Corral'
+        });
+        authorRow.set_sensitive(false);
+        aboutGroup.add(authorRow);
+
+        const repoRow = new Adw.ActionRow({
+            title: _('Source Code'),
+            subtitle: _('View on GitLab')
+        });
+        const repoButton = new Gtk.Button({
+            label: _('Open Repository'),
+            valign: Gtk.Align.CENTER
+        });
+        repoButton.connect('clicked', () => {
+            const uri = this.metadata.url;
+            if (uri) {
+                Gio.app_info_launch_default_for_uri(uri, null);
+            }
+        });
+        repoRow.add_suffix(repoButton);
+        aboutGroup.add(repoRow);
+
+        window.add(page);
+    }
+}
