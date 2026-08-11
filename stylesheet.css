@@ -29,14 +29,6 @@
 }
 
 .reloj-lcd-alarm-dot {
-    width: 7px;
-    height: 7px;
-    min-width: 7px;
-    max-width: 7px;
-    min-height: 7px;
-    max-height: 7px;
-    border-radius: 3.5px;
-    margin-right: 6px;
     flex-shrink: 0;
     flex-grow: 0;
     align-self: center;

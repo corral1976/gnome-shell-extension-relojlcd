@@ -6,6 +6,9 @@ import GLib from 'gi://GLib';
 import Gdk from 'gi://Gdk';
 import { isValidHex, hexToRgba } from './colorUtils.js';
 
+const PREVIEW_MAX_FONT_SIZE = 4;
+const PREVIEW_BASE_FONT_PT = 11;
+
 const PRESET_COLORS = {
     green: '#00ff00',
     amber: '#ffb000',
@@ -39,10 +42,42 @@ function getPreviewColors(colorType, customHex) {
     const base = colorType === 'custom'
         ? (isValidHex(customHex) ? customHex : '#00ff00')
         : (PRESET_COLORS[colorType] || PRESET_COLORS.green);
-    return { main: base, border: base, bg: hexToRgba(base, 0.2) };
+    return { main: base, border: base, bg: hexToRgba(base, 0.2), glow: hexToRgba(base, 0.8) };
 }
 
-function drawClockPreview(cr, width, height, colors, glowValue, isRetro) {
+function calculateSizeScale(fontSize) {
+    const baseFontSize = 1.8;
+    return Math.max(0.4, Math.min(2, fontSize / baseFontSize));
+}
+
+function calculateAlarmDotDiameter(fontSize) {
+    const baseFontSize = 1.8;
+    const baseDotSize = 7;
+    return Math.max(4, Math.min(14, baseDotSize * (fontSize / baseFontSize)));
+}
+
+function calculateRetroShadowOffset(glow, fontSize) {
+    const sizeScale = calculateSizeScale(fontSize);
+    const offsetPerGlowUnit = 1.2;
+    return glow * offsetPerGlowUnit * sizeScale;
+}
+
+function calculateDigitShadow(colorType, glow, colors, fontSize) {
+    const sizeScale = calculateSizeScale(fontSize);
+    if (colorType === 'gray' && glow >= 1) {
+        const shadowOffset = calculateRetroShadowOffset(glow, fontSize);
+        return `${shadowOffset.toFixed(1)}px ${shadowOffset.toFixed(1)}px 0 rgba(80, 80, 80, 0.6)`;
+    }
+    if (glow > 0) {
+        const shadowOpacity = Math.min(1, glow / 8);
+        const shadowBlur = (2 + shadowOpacity * 10) * sizeScale;
+        const maxBlur = Math.max(4 * sizeScale, shadowBlur * 1.5);
+        return `0 0 ${shadowBlur.toFixed(1)}px ${colors.glow}, 0 0 ${maxBlur.toFixed(1)}px ${colors.glow}`;
+    }
+    return 'none';
+}
+
+function drawClockPreview(cr, width, height, colors, glowValue, isRetro, fontSize, showAlarmDot) {
     const radius = 10;
     const roundedRect = (x, y, w, h, r) => {
         cr.newSubPath();
@@ -67,7 +102,7 @@ function drawClockPreview(cr, width, height, colors, glowValue, isRetro) {
         const glow = hexTo01(colors.main);
         const steps = 4;
         for (let i = steps; i >= 1; i--) {
-            const alpha = (glowValue / 20) * 0.15 * (i / steps);
+            const alpha = (glowValue / 10) * 0.15 * (i / steps);
             roundedRect(4 - i * 1.5, 4 - i * 1.5, width - 8 + i * 3, height - 8 + i * 3, radius + i);
             cr.setSourceRGBA(glow.r, glow.g, glow.b, alpha);
             cr.setLineWidth(2);
@@ -75,11 +110,35 @@ function drawClockPreview(cr, width, height, colors, glowValue, isRetro) {
         }
     }
 
-    const main = hexTo01(colors.main);
+    if (showAlarmDot) {
+        const main = hexTo01(colors.main);
+        const dotDiameter = calculateAlarmDotDiameter(fontSize);
+        const dotRadius = dotDiameter / 2;
+        const cx = 16;
+        const cy = height / 2;
 
-    cr.arc(width - 16, 16, 4, 0, 2 * Math.PI);
-    cr.setSourceRGBA(main.r, main.g, main.b, 1);
-    cr.fill();
+        if (isRetro && glowValue >= 1) {
+            const shadowOffset = calculateRetroShadowOffset(glowValue, fontSize);
+            cr.arc(cx + shadowOffset, cy + shadowOffset, dotRadius, 0, 2 * Math.PI);
+            cr.setSourceRGBA(80 / 255, 80 / 255, 80 / 255, 0.6);
+            cr.fill();
+        }
+
+        if (!isRetro && glowValue > 0) {
+            const glow = hexTo01(colors.main);
+            const steps = 4;
+            for (let i = steps; i >= 1; i--) {
+                const alpha = (glowValue / 10) * 0.2 * (i / steps);
+                cr.arc(cx, cy, dotRadius + i * 1.5, 0, 2 * Math.PI);
+                cr.setSourceRGBA(glow.r, glow.g, glow.b, alpha);
+                cr.fill();
+            }
+        }
+
+        cr.arc(cx, cy, dotRadius, 0, 2 * Math.PI);
+        cr.setSourceRGBA(main.r, main.g, main.b, 1);
+        cr.fill();
+    }
 }
 
 function parseAlarms(raw) {
@@ -146,10 +205,18 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
         const previewFontFamily = previewFontOk ? 'DSEG7 Classic' : 'Monospace';
 
         const dateGroup = new Adw.PreferencesGroup({
-            title: _('Current Date'),
-            description: GLib.DateTime.new_now_local().format('%A, %d %B %Y')
+            title: _('Current Date')
         });
         page.add(dateGroup);
+
+        const dateLabel = new Gtk.Label({
+            label: GLib.DateTime.new_now_local().format('%A, %d %B %Y'),
+            halign: Gtk.Align.CENTER,
+            margin_top: 4,
+            margin_bottom: 10,
+            css_classes: ['title-2']
+        });
+        dateGroup.add(dateLabel);
 
         const displayGroup = new Adw.PreferencesGroup({
             title: _('Visual Appearance'),
@@ -282,13 +349,17 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
         previewArea.set_draw_func((area, cr, width, height) => {
             const colorType = settings.get_string('clock-color');
             const colors = getPreviewColors(colorType, settings.get_string('custom-color'));
-            drawClockPreview(cr, width, height, colors, settings.get_double('glow-intensity'), colorType === 'gray');
+            const previewFontSize = Math.min(settings.get_double('font-size'), PREVIEW_MAX_FONT_SIZE);
+            const hasEnabledAlarm = parseAlarms(settings.get_string('alarms')).some(alarm => alarm.enabled);
+            drawClockPreview(cr, width, height, colors, settings.get_double('glow-intensity'), colorType === 'gray', previewFontSize, hasEnabledAlarm);
         });
 
         const previewLabel = new Gtk.Label({
             halign: Gtk.Align.CENTER,
             valign: Gtk.Align.CENTER
         });
+        const previewLabelCss = new Gtk.CssProvider();
+        previewLabel.get_style_context().add_provider(previewLabelCss, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);
 
         const previewOverlay = new Gtk.Overlay({
             halign: Gtk.Align.CENTER,
@@ -301,8 +372,8 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
         const updatePreviewLabel = () => {
             const colorType = settings.get_string('clock-color');
             const colors = getPreviewColors(colorType, settings.get_string('custom-color'));
-            const fontSize = Math.max(1.0, Math.min(settings.get_double('font-size'), 3.0));
-            const sizePt = Math.round(22 * fontSize * 1024);
+            const fontSize = Math.min(settings.get_double('font-size'), PREVIEW_MAX_FONT_SIZE);
+            const sizePt = Math.round(PREVIEW_BASE_FONT_PT * fontSize * 1024);
             const fontStyle = settings.get_string('font-style');
             let pangoWeight = 'normal';
             let pangoStyle = 'normal';
@@ -317,6 +388,14 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
             previewLabel.set_markup(
                 `<span font_family="${previewFontFamily}" size="${sizePt}" style="${pangoStyle}" weight="${pangoWeight}" foreground="${colors.main}">88:88</span>`
             );
+            const digitShadow = calculateDigitShadow(colorType, settings.get_double('glow-intensity'), colors, fontSize);
+            previewLabelCss.load_from_string(`label { text-shadow: ${digitShadow}; }`);
+
+            const [, naturalWidth] = previewLabel.measure(Gtk.Orientation.HORIZONTAL, -1);
+            const [, naturalHeight] = previewLabel.measure(Gtk.Orientation.VERTICAL, -1);
+            previewArea.set_content_width(naturalWidth + 56);
+            previewArea.set_content_height(naturalHeight + 24);
+            previewArea.queue_draw();
         };
         updatePreviewLabel();
 
@@ -365,7 +444,7 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
             updatePreviewLabel();
         });
 
-        const glowAdjustment = new Gtk.Adjustment({ lower: 0, upper: 20, step_increment: 1, value: settings.get_double('glow-intensity') });
+        const glowAdjustment = new Gtk.Adjustment({ lower: 0, upper: 10, step_increment: 1, value: settings.get_double('glow-intensity') });
         const glowRow = new Adw.ActionRow({
             title: _('Glow / Shadow Intensity'),
             subtitle: _('Control glow for colored themes or shadow strength for Retro LCD')
@@ -378,10 +457,10 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
 
         const updateGlowLimit = (color) => {
             const isRetro = color === 'gray';
-            glowAdjustment.set_upper(isRetro ? 10 : 20);
-            if (isRetro && glowAdjustment.get_value() > 10) {
-                glowAdjustment.set_value(10);
-                settings.set_double('glow-intensity', 10);
+            glowAdjustment.set_upper(isRetro ? 5 : 10);
+            if (isRetro && glowAdjustment.get_value() > 5) {
+                glowAdjustment.set_value(5);
+                settings.set_double('glow-intensity', 5);
             }
         };
 
@@ -390,7 +469,7 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
         glowSpin.connect('value-changed', (w) => {
             const intensity = Math.floor(w.get_value());
             settings.set_double('glow-intensity', intensity);
-            previewArea.queue_draw();
+            updatePreviewLabel();
         });
         glowRow.add_suffix(glowSpin);
         displayGroup.add(glowRow);
@@ -414,7 +493,10 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
         page.add(alarmGroup);
 
         let alarms = parseAlarms(settings.get_string('alarms'));
-        const saveAlarms = () => settings.set_string('alarms', JSON.stringify(alarms));
+        const saveAlarms = () => {
+            settings.set_string('alarms', JSON.stringify(alarms));
+            previewArea.queue_draw();
+        };
 
         const hasSpecificDate = (alarm) => alarm.year !== undefined && alarm.month !== undefined && alarm.day !== undefined;
 
@@ -576,6 +658,56 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
         });
 
         alarmGroup.add(addAlarmButtonRow);
+
+        const testSoundRow = new Adw.ActionRow({
+            title: _('Test Alarm Sound'),
+            subtitle: _('Play or stop the alarm sound to preview it')
+        });
+        const testSoundButton = new Gtk.Button({
+            icon_name: 'media-playback-start-symbolic',
+            valign: Gtk.Align.CENTER
+        });
+
+        let isTestSoundPlaying = false;
+        let testSoundTimeoutId = null;
+
+        const setTestSoundPlaying = (playing) => {
+            isTestSoundPlaying = playing;
+            testSoundButton.set_icon_name(playing ? 'media-playback-stop-symbolic' : 'media-playback-start-symbolic');
+        };
+
+        testSoundButton.connect('clicked', () => {
+            if (isTestSoundPlaying) {
+                if (testSoundTimeoutId) {
+                    GLib.Source.remove(testSoundTimeoutId);
+                    testSoundTimeoutId = null;
+                }
+                settings.set_int('test-alarm-stop-counter', settings.get_int('test-alarm-stop-counter') + 1);
+                setTestSoundPlaying(false);
+            } else {
+                settings.set_int('test-alarm-counter', settings.get_int('test-alarm-counter') + 1);
+                setTestSoundPlaying(true);
+                testSoundTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 8200, () => {
+                    testSoundTimeoutId = null;
+                    setTestSoundPlaying(false);
+                    return GLib.SOURCE_REMOVE;
+                });
+            }
+        });
+        testSoundRow.add_suffix(testSoundButton);
+        testSoundRow.set_activatable_widget(testSoundButton);
+        alarmGroup.add(testSoundRow);
+
+        window.connect('close-request', () => {
+            if (testSoundTimeoutId) {
+                GLib.Source.remove(testSoundTimeoutId);
+                testSoundTimeoutId = null;
+            }
+            if (isTestSoundPlaying) {
+                settings.set_int('test-alarm-stop-counter', settings.get_int('test-alarm-stop-counter') + 1);
+            }
+            return false;
+        });
 
         const snoozeRow = new Adw.ActionRow({
             title: _('Snooze Duration'),

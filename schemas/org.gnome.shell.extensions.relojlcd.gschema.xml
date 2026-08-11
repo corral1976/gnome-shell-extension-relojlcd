@@ -92,6 +92,16 @@
       <summary>Snooze duration in minutes</summary>
       <description>How many minutes to wait before a snoozed alarm rings again</description>
     </key>
+    <key name="test-alarm-counter" type="i">
+      <default>0</default>
+      <summary>Test alarm trigger</summary>
+      <description>Incremented by the preferences window to ask the running extension to play the alarm sound once, as a preview</description>
+    </key>
+    <key name="test-alarm-stop-counter" type="i">
+      <default>0</default>
+      <summary>Test alarm stop trigger</summary>
+      <description>Incremented by the preferences window to ask the running extension to stop the test alarm sound preview</description>
+    </key>
     <key name="show-date" type="b">
       <default>false</default>
       <summary>Show date</summary>
