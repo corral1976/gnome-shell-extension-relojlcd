@@ -25,7 +25,7 @@ Repository mirrors: [GitLab](https://gitlab.com/corral1976/gnome-shell-extension
 - 8 color themes: neon green, amber, retro gray, ruby, sapphire, white, violet and gold
 - Custom color picker for digits, separators, alarm dot and border, with a live preview in the preferences window
 - Multiple alarms with sound, custom labels and snooze support
-- Built-in preferences panel (GTK4/Adwaita)
+- Built-in preferences panel (GTK4/Adwaita), organized into General, Appearance, Alarms and About tabs
 - Looks good in both light and dark shell themes
 - Desktop widget mode (draggable) or docked to the panel
 - Optional flicker effect, for that old-LCD-screen feel
@@ -104,6 +104,7 @@ If nothing shows up after all this, try restarting your whole computer once befo
 relojlcd@carlos/
 ├── extension.js
 ├── colorUtils.js
+├── renderMath.js
 ├── metadata.json
 ├── prefs.js
 ├── stylesheet.css

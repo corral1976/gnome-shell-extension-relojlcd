@@ -5,6 +5,11 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Gdk from 'gi://Gdk';
 import { isValidHex, hexToRgba } from './colorUtils.js';
+import {
+    calculateAlarmDotSize,
+    calculateRetroShadowOffset,
+    calculateDigitShadow
+} from './renderMath.js';
 
 const PREVIEW_MAX_FONT_SIZE = 4;
 const PREVIEW_BASE_FONT_PT = 11;
@@ -12,13 +17,16 @@ const PREVIEW_BASE_FONT_PT = 11;
 const PRESET_COLORS = {
     green: '#00ff00',
     amber: '#ffb000',
-    gray: '#1a1a1a',
     ruby: '#ff5555',
     sapphire: '#0088ff',
     white: '#ffffff',
     violet: '#8b5cf6',
     gold: '#ffd700'
 };
+
+const RETRO_MAIN_COLOR = '#000000';
+const RETRO_BORDER_COLOR = '#6a8a5a';
+const RETRO_BG_COLOR = 'rgba(120, 150, 100, 0.95)';
 
 function hexTo01(hex) {
     const clean = hex.replace('#', '');
@@ -37,44 +45,12 @@ function rgbaStringTo01(str) {
 
 function getPreviewColors(colorType, customHex) {
     if (colorType === 'gray') {
-        return { main: '#1a1a1a', border: '#6a8a5a', bg: 'rgba(120, 150, 100, 0.95)' };
+        return { main: RETRO_MAIN_COLOR, border: RETRO_BORDER_COLOR, bg: RETRO_BG_COLOR };
     }
     const base = colorType === 'custom'
         ? (isValidHex(customHex) ? customHex : '#00ff00')
         : (PRESET_COLORS[colorType] || PRESET_COLORS.green);
     return { main: base, border: base, bg: hexToRgba(base, 0.2), glow: hexToRgba(base, 0.8) };
-}
-
-function calculateSizeScale(fontSize) {
-    const baseFontSize = 1.8;
-    return Math.max(0.4, Math.min(2, fontSize / baseFontSize));
-}
-
-function calculateAlarmDotDiameter(fontSize) {
-    const baseFontSize = 1.8;
-    const baseDotSize = 7;
-    return Math.max(4, Math.min(14, baseDotSize * (fontSize / baseFontSize)));
-}
-
-function calculateRetroShadowOffset(glow, fontSize) {
-    const sizeScale = calculateSizeScale(fontSize);
-    const offsetPerGlowUnit = 1.2;
-    return glow * offsetPerGlowUnit * sizeScale;
-}
-
-function calculateDigitShadow(colorType, glow, colors, fontSize) {
-    const sizeScale = calculateSizeScale(fontSize);
-    if (colorType === 'gray' && glow >= 1) {
-        const shadowOffset = calculateRetroShadowOffset(glow, fontSize);
-        return `${shadowOffset.toFixed(1)}px ${shadowOffset.toFixed(1)}px 0 rgba(80, 80, 80, 0.6)`;
-    }
-    if (glow > 0) {
-        const shadowOpacity = Math.min(1, glow / 8);
-        const shadowBlur = (2 + shadowOpacity * 10) * sizeScale;
-        const maxBlur = Math.max(4 * sizeScale, shadowBlur * 1.5);
-        return `0 0 ${shadowBlur.toFixed(1)}px ${colors.glow}, 0 0 ${maxBlur.toFixed(1)}px ${colors.glow}`;
-    }
-    return 'none';
 }
 
 function drawClockPreview(cr, width, height, colors, glowValue, isRetro, fontSize, showAlarmDot) {
@@ -112,7 +88,7 @@ function drawClockPreview(cr, width, height, colors, glowValue, isRetro, fontSiz
 
     if (showAlarmDot) {
         const main = hexTo01(colors.main);
-        const dotDiameter = calculateAlarmDotDiameter(fontSize);
+        const dotDiameter = calculateAlarmDotSize(fontSize);
         const dotRadius = dotDiameter / 2;
         const cx = 16;
         const cy = height / 2;
@@ -199,15 +175,31 @@ function installPreviewFonts(extensionPath) {
 export default class RelojLCDPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const settings = this.getSettings();
-        const page = new Adw.PreferencesPage();
 
         const previewFontOk = installPreviewFonts(this.path);
         const previewFontFamily = previewFontOk ? 'DSEG7 Classic' : 'Monospace';
 
+        const generalPage = new Adw.PreferencesPage({
+            title: _('General'),
+            icon_name: 'preferences-system-symbolic'
+        });
+        const appearancePage = new Adw.PreferencesPage({
+            title: _('Appearance'),
+            icon_name: 'applications-graphics-symbolic'
+        });
+        const alarmsPage = new Adw.PreferencesPage({
+            title: _('Alarms'),
+            icon_name: 'alarm-symbolic'
+        });
+        const aboutPage = new Adw.PreferencesPage({
+            title: _('About'),
+            icon_name: 'help-about-symbolic'
+        });
+
         const dateGroup = new Adw.PreferencesGroup({
             title: _('Current Date')
         });
-        page.add(dateGroup);
+        generalPage.add(dateGroup);
 
         const dateLabel = new Gtk.Label({
             label: GLib.DateTime.new_now_local().format('%A, %d %B %Y'),
@@ -218,11 +210,11 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
         });
         dateGroup.add(dateLabel);
 
-        const displayGroup = new Adw.PreferencesGroup({
-            title: _('Visual Appearance'),
-            description: _('Customize the clock display and colors')
+        const behaviorGroup = new Adw.PreferencesGroup({
+            title: _('Clock Behavior'),
+            description: _('Choose what the clock shows and where it lives')
         });
-        page.add(displayGroup);
+        generalPage.add(behaviorGroup);
 
         const widgetRow = new Adw.ActionRow({
             title: _('Desktop Widget Mode'),
@@ -236,7 +228,7 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
             settings.set_boolean('is-widget', w.active);
         });
         widgetRow.add_suffix(widgetSwitch);
-        displayGroup.add(widgetRow);
+        behaviorGroup.add(widgetRow);
 
         const formatRow = new Adw.ActionRow({
             title: _('24-Hour Format'),
@@ -250,7 +242,7 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
             settings.set_boolean('clock-format-24h', w.active);
         });
         formatRow.add_suffix(formatSwitch);
-        displayGroup.add(formatRow);
+        behaviorGroup.add(formatRow);
 
         const secondsRow = new Adw.ActionRow({
             title: _('Show Seconds'),
@@ -264,7 +256,7 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
             settings.set_boolean('show-seconds', w.active);
         });
         secondsRow.add_suffix(secondsSwitch);
-        displayGroup.add(secondsRow);
+        behaviorGroup.add(secondsRow);
 
         const dateRow = new Adw.ActionRow({
             title: _('Show Date'),
@@ -278,66 +270,19 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
             settings.set_boolean('show-date', w.active);
         });
         dateRow.add_suffix(dateSwitch);
-        displayGroup.add(dateRow);
+        behaviorGroup.add(dateRow);
 
-        const blinkRow = new Adw.ActionRow({
-            title: _('Blinking Separators'),
-            subtitle: _('Make the time separators blink for classic LCD effect')
+        const positionRow = new Adw.ComboRow({
+            title: _('Panel Position'),
+            subtitle: _('Choose where the clock appears on the panel'),
+            model: new Gtk.StringList({ strings: [_('Left'), _('Center'), _('Right')] }),
+            selected: ['left', 'center', 'right'].indexOf(settings.get_string('panel-position'))
         });
-        const blinkSwitch = new Gtk.Switch({
-            active: settings.get_boolean('blink-dots'),
-            valign: Gtk.Align.CENTER
+        positionRow.connect('notify::selected', (w) => {
+            const positions = ['left', 'center', 'right'];
+            settings.set_string('panel-position', positions[w.selected]);
         });
-        blinkSwitch.connect('notify::active', (w) => {
-            settings.set_boolean('blink-dots', w.active);
-        });
-        blinkRow.add_suffix(blinkSwitch);
-        displayGroup.add(blinkRow);
-
-        const flickerRow = new Adw.ActionRow({
-            title: _('Flicker Effect'),
-            subtitle: _('Add subtle random flicker for vintage LCD display feel')
-        });
-        const flickerSwitch = new Gtk.Switch({
-            active: settings.get_boolean('flicker-enabled'),
-            valign: Gtk.Align.CENTER
-        });
-        flickerSwitch.connect('notify::active', (w) => {
-            settings.set_boolean('flicker-enabled', w.active);
-        });
-        flickerRow.add_suffix(flickerSwitch);
-        displayGroup.add(flickerRow);
-
-        const fontRow = new Adw.ActionRow({
-            title: _('Font Size'),
-            subtitle: _('Adjust the clock display size')
-        });
-        const fontSpin = new Gtk.SpinButton({
-            adjustment: new Gtk.Adjustment({ lower: 1.0, upper: 10.0, step_increment: 0.1, value: settings.get_double('font-size') }),
-            digits: 1,
-            valign: Gtk.Align.CENTER
-        });
-        fontSpin.connect('value-changed', (w) => {
-            const size = Math.round(w.get_value() * 10) / 10;
-            settings.set_double('font-size', size);
-            updatePreviewLabel();
-        });
-        fontRow.add_suffix(fontSpin);
-        displayGroup.add(fontRow);
-
-        const fontStyleKeys = ['regular', 'italic', 'bold', 'italic-bold'];
-        const fontStyleRow = new Adw.ComboRow({
-            title: _('Font Style'),
-            subtitle: _('Choose the font style (synthetic bold/italic by Pango)'),
-            model: new Gtk.StringList({ strings: [_('Regular'), _('Italic'), _('Bold'), _('Italic Bold')] }),
-            selected: fontStyleKeys.indexOf(settings.get_string('font-style'))
-        });
-        fontStyleRow.connect('notify::selected', (w) => {
-            const style = fontStyleKeys[w.selected];
-            settings.set_string('font-style', style);
-            updatePreviewLabel();
-        });
-        displayGroup.add(fontStyleRow);
+        behaviorGroup.add(positionRow);
 
         const colorKeys = ['green', 'amber', 'gray', 'ruby', 'sapphire', 'white', 'violet', 'gold', 'custom'];
 
@@ -388,7 +333,7 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
             previewLabel.set_markup(
                 `<span font_family="${previewFontFamily}" size="${sizePt}" style="${pangoStyle}" weight="${pangoWeight}" foreground="${colors.main}">88:88</span>`
             );
-            const digitShadow = calculateDigitShadow(colorType, settings.get_double('glow-intensity'), colors, fontSize);
+            const digitShadow = calculateDigitShadow(colorType, settings.get_double('glow-intensity'), colors.glow, fontSize);
             previewLabelCss.load_from_string(`label { text-shadow: ${digitShadow}; }`);
 
             const [, naturalWidth] = previewLabel.measure(Gtk.Orientation.HORIZONTAL, -1);
@@ -399,9 +344,15 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
         };
         updatePreviewLabel();
 
-        const previewRow = new Adw.PreferencesGroup({ description: _('Live preview') });
-        previewRow.add(previewOverlay);
-        displayGroup.add(previewRow);
+        const previewGroup = new Adw.PreferencesGroup({ description: _('Live preview') });
+        previewGroup.add(previewOverlay);
+        appearancePage.add(previewGroup);
+
+        const colorGroup = new Adw.PreferencesGroup({
+            title: _('Color & Glow'),
+            description: _('Pick a theme and tune how it glows')
+        });
+        appearancePage.add(colorGroup);
 
         const colorRow = new Adw.ComboRow({
             title: _('Color Theme'),
@@ -409,7 +360,7 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
             model: new Gtk.StringList({ strings: [_('Neon Green'), _('Vintage Amber'), _('Retro LCD'), _('Red Ruby'), _('Blue Sapphire'), _('White LED'), _('Violet Purple'), _('Gold'), _('Custom Color')] }),
             selected: colorKeys.indexOf(settings.get_string('clock-color'))
         });
-        displayGroup.add(colorRow);
+        colorGroup.add(colorRow);
 
         const customColorRow = new Adw.ActionRow({
             title: _('Custom Color'),
@@ -433,7 +384,7 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
         });
         customColorRow.add_suffix(colorButton);
         customColorRow.set_visible(settings.get_string('clock-color') === 'custom');
-        displayGroup.add(customColorRow);
+        colorGroup.add(customColorRow);
 
         colorRow.connect('notify::selected', (w) => {
             const color = colorKeys[w.selected];
@@ -472,25 +423,78 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
             updatePreviewLabel();
         });
         glowRow.add_suffix(glowSpin);
-        displayGroup.add(glowRow);
+        colorGroup.add(glowRow);
 
-        const positionRow = new Adw.ComboRow({
-            title: _('Panel Position'),
-            subtitle: _('Choose where the clock appears on the panel'),
-            model: new Gtk.StringList({ strings: [_('Left'), _('Center'), _('Right')] }),
-            selected: ['left', 'center', 'right'].indexOf(settings.get_string('panel-position'))
+        const textGroup = new Adw.PreferencesGroup({
+            title: _('Font & Effects'),
+            description: _('Adjust size, style and vintage display effects')
         });
-        positionRow.connect('notify::selected', (w) => {
-            const positions = ['left', 'center', 'right'];
-            settings.set_string('panel-position', positions[w.selected]);
+        appearancePage.add(textGroup);
+
+        const fontRow = new Adw.ActionRow({
+            title: _('Font Size'),
+            subtitle: _('Adjust the clock display size')
         });
-        displayGroup.add(positionRow);
+        const fontSpin = new Gtk.SpinButton({
+            adjustment: new Gtk.Adjustment({ lower: 1.0, upper: 10.0, step_increment: 0.1, value: settings.get_double('font-size') }),
+            digits: 1,
+            valign: Gtk.Align.CENTER
+        });
+        fontSpin.connect('value-changed', (w) => {
+            const size = Math.round(w.get_value() * 10) / 10;
+            settings.set_double('font-size', size);
+            updatePreviewLabel();
+        });
+        fontRow.add_suffix(fontSpin);
+        textGroup.add(fontRow);
+
+        const fontStyleKeys = ['regular', 'italic', 'bold', 'italic-bold'];
+        const fontStyleRow = new Adw.ComboRow({
+            title: _('Font Style'),
+            subtitle: _('Choose the font style (synthetic bold/italic by Pango)'),
+            model: new Gtk.StringList({ strings: [_('Regular'), _('Italic'), _('Bold'), _('Italic Bold')] }),
+            selected: fontStyleKeys.indexOf(settings.get_string('font-style'))
+        });
+        fontStyleRow.connect('notify::selected', (w) => {
+            const style = fontStyleKeys[w.selected];
+            settings.set_string('font-style', style);
+            updatePreviewLabel();
+        });
+        textGroup.add(fontStyleRow);
+
+        const blinkRow = new Adw.ActionRow({
+            title: _('Blinking Separators'),
+            subtitle: _('Make the time separators blink for classic LCD effect')
+        });
+        const blinkSwitch = new Gtk.Switch({
+            active: settings.get_boolean('blink-dots'),
+            valign: Gtk.Align.CENTER
+        });
+        blinkSwitch.connect('notify::active', (w) => {
+            settings.set_boolean('blink-dots', w.active);
+        });
+        blinkRow.add_suffix(blinkSwitch);
+        textGroup.add(blinkRow);
+
+        const flickerRow = new Adw.ActionRow({
+            title: _('Flicker Effect'),
+            subtitle: _('Add subtle random flicker for vintage LCD display feel')
+        });
+        const flickerSwitch = new Gtk.Switch({
+            active: settings.get_boolean('flicker-enabled'),
+            valign: Gtk.Align.CENTER
+        });
+        flickerSwitch.connect('notify::active', (w) => {
+            settings.set_boolean('flicker-enabled', w.active);
+        });
+        flickerRow.add_suffix(flickerSwitch);
+        textGroup.add(flickerRow);
 
         const alarmGroup = new Adw.PreferencesGroup({
             title: _('Alarms'),
             description: _('Add one or more alarms; each one can be snoozed independently')
         });
-        page.add(alarmGroup);
+        alarmsPage.add(alarmGroup);
 
         let alarms = parseAlarms(settings.get_string('alarms'));
         const saveAlarms = () => {
@@ -659,6 +663,11 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
 
         alarmGroup.add(addAlarmButtonRow);
 
+        const alarmSettingsGroup = new Adw.PreferencesGroup({
+            title: _('Sound & Snooze')
+        });
+        alarmsPage.add(alarmSettingsGroup);
+
         const testSoundRow = new Adw.ActionRow({
             title: _('Test Alarm Sound'),
             subtitle: _('Play or stop the alarm sound to preview it')
@@ -696,7 +705,7 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
         });
         testSoundRow.add_suffix(testSoundButton);
         testSoundRow.set_activatable_widget(testSoundButton);
-        alarmGroup.add(testSoundRow);
+        alarmSettingsGroup.add(testSoundRow);
 
         window.connect('close-request', () => {
             if (testSoundTimeoutId) {
@@ -721,13 +730,13 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
             settings.set_int('snooze-minutes', Math.floor(w.get_value()));
         });
         snoozeRow.add_suffix(snoozeSpin);
-        alarmGroup.add(snoozeRow);
+        alarmSettingsGroup.add(snoozeRow);
 
         const aboutGroup = new Adw.PreferencesGroup({
             title: _('About'),
             description: _('Information and credits')
         });
-        page.add(aboutGroup);
+        aboutPage.add(aboutGroup);
 
         const versionRow = new Adw.ActionRow({
             title: _('Version'),
@@ -760,6 +769,31 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
         repoRow.add_suffix(repoButton);
         aboutGroup.add(repoRow);
 
-        window.add(page);
+        const supportGroup = new Adw.PreferencesGroup({
+            title: _('Support Us')
+        });
+        aboutPage.add(supportGroup);
+
+        const kofiRow = new Adw.ActionRow({
+            title: _('Support on Ko-fi'),
+            subtitle: _('Buy the developer a coffee')
+        });
+        const kofiButton = new Gtk.Button({
+            label: _('Open Ko-fi'),
+            valign: Gtk.Align.CENTER
+        });
+        kofiButton.connect('clicked', () => {
+            const kofiUser = this.metadata.donations?.kofi;
+            if (kofiUser) {
+                Gio.app_info_launch_default_for_uri(`https://ko-fi.com/${kofiUser}`, null);
+            }
+        });
+        kofiRow.add_suffix(kofiButton);
+        supportGroup.add(kofiRow);
+
+        window.add(generalPage);
+        window.add(appearancePage);
+        window.add(alarmsPage);
+        window.add(aboutPage);
     }
 }
