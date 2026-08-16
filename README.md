@@ -1,7 +1,5 @@
 # Retro LCD 7-Segment Clock & Widget
 
-![Preview](preview.png)
-
 GNOME Shell extension that shows a retro digital LCD-style clock in the top panel, or as a floating widget on the desktop.
 
 Minimalist, lightweight design, true to the classic 7-segment LCD look from the 80s/90s.
