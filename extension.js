@@ -8,6 +8,13 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import { Extension, gettext as _ } from 'resource:///org/gnome/shell/extensions/extension.js';
 import { buildCustomTheme } from './colorUtils.js';
+import {
+    calculateRetroShadowOffset,
+    calculateShadowExtent,
+    calculateDigitShadow,
+    calculateAlarmDotSize,
+    calculateAlarmDotMargin
+} from './renderMath.js';
 
 const THEME_MAP = {
     gray: {
@@ -193,7 +200,30 @@ export default class RelojLCDExtension extends Extension {
         return id;
     }
 
+    _disconnectIndicatorSignals() {
+        if (this._dragGrab) {
+            this._dragGrab.dismiss();
+            this._dragGrab = null;
+        }
+
+        if (this._indicator && this._dragHandler) {
+            this._indicator.disconnect(this._dragHandler);
+            this._dragHandler = null;
+        }
+
+        if (this._indicator && this._releaseHandler) {
+            this._indicator.disconnect(this._releaseHandler);
+            this._releaseHandler = null;
+        }
+
+        for (const { obj, id } of this._signals)
+            obj.disconnect(id);
+        this._signals = [];
+    }
+
     _resetView() {
+        this._disconnectIndicatorSignals();
+
         if (this._indicator) {
             if (this._isChromeIndicator) Main.layoutManager.removeChrome(this._indicator);
             this._indicator.destroy();
@@ -239,27 +269,7 @@ export default class RelojLCDExtension extends Extension {
             this._initTimeoutId = null;
         }
 
-        if (this._dragGrab) {
-            this._dragGrab.dismiss();
-            this._dragGrab = null;
-        }
-
-        if (this._indicator && this._dragHandler) {
-            this._indicator.disconnect(this._dragHandler);
-            this._dragHandler = null;
-        }
-
-        if (this._indicator && this._releaseHandler) {
-            this._indicator.disconnect(this._releaseHandler);
-            this._releaseHandler = null;
-        }
-
-        if (this._signals) {
-            for (const { obj, id } of this._signals) {
-                if (obj) obj.disconnect(id);
-            }
-            this._signals = [];
-        }
+        this._disconnectIndicatorSignals();
 
         if (this._clockLabel) {
             this._clockLabel.destroy();
@@ -864,7 +874,7 @@ export default class RelojLCDExtension extends Extension {
 
         const config = this._getStyleConfig();
         const theme = this._getTheme(config.colorType);
-        const shadow = this._calculateShadow(config.colorType, config.glow, theme, config.fontSize);
+        const shadow = calculateDigitShadow(config.colorType, config.glow, theme.glow, config.fontSize);
         
         this._updateShadowLabelVisibility(config);
         const containerStyle = this._buildContainerStyle(config, theme);
@@ -891,37 +901,15 @@ export default class RelojLCDExtension extends Extension {
         };
     }
 
-    _calculateSizeScale(fontSize) {
-        const baseFontSize = 1.8;
-        return Math.max(0.4, Math.min(2, fontSize / baseFontSize));
-    }
-
     _calculateHorizontalPadding(fontSize, showSeconds, glow, colorType) {
         const baseFontSize = 1.8;
         const basePadding = showSeconds ? 16 : 24;
         const minPadding = 6;
         const maxPadding = 50;
         const proportionalPadding = basePadding * (fontSize / baseFontSize);
-        const shadowSafetyMargin = this._calculateShadowExtent(glow, colorType, fontSize) + 4;
+        const shadowSafetyMargin = calculateShadowExtent(glow, colorType, fontSize) + 4;
         const padding = Math.max(proportionalPadding, shadowSafetyMargin);
         return Math.max(minPadding, Math.min(maxPadding, padding));
-    }
-
-    _calculateRetroShadowOffset(glow, fontSize) {
-        const sizeScale = this._calculateSizeScale(fontSize);
-        const offsetPerGlowUnit = 1.2;
-        return glow * offsetPerGlowUnit * sizeScale;
-    }
-
-    _calculateShadowExtent(glow, colorType, fontSize) {
-        if (colorType === 'gray') {
-            return glow >= 1 ? this._calculateRetroShadowOffset(glow, fontSize) : 0;
-        }
-        const sizeScale = this._calculateSizeScale(fontSize);
-        if (glow <= 0) return 0;
-        const shadowOpacity = Math.min(1, glow / 8);
-        const shadowBlur = (2 + shadowOpacity * 10) * sizeScale;
-        return Math.max(4 * sizeScale, shadowBlur * 1.5);
     }
 
     _getTheme(colorType) {
@@ -1044,11 +1032,11 @@ export default class RelojLCDExtension extends Extension {
     }
 
     _updateAlarmDotAppearance(config, theme, shadow) {
-        const dotSize = this._calculateAlarmDotSize(config.fontSize);
-        const dotMargin = this._calculateAlarmDotMargin(dotSize);
+        const dotSize = calculateAlarmDotSize(config.fontSize);
+        const dotMargin = calculateAlarmDotMargin(dotSize);
         const isRetro = config.colorType === 'gray';
         const showGhostShadow = isRetro && config.glow >= 1;
-        const shadowOffset = showGhostShadow ? this._calculateRetroShadowOffset(config.glow, config.fontSize) : 0;
+        const shadowOffset = showGhostShadow ? calculateRetroShadowOffset(config.glow, config.fontSize) : 0;
 
         const dotGeometryStyle =
             `width: ${dotSize.toFixed(1)}px;` +
@@ -1079,35 +1067,6 @@ export default class RelojLCDExtension extends Extension {
         }
 
         this._alarmDotWrapper.set_style(`margin-right: ${dotMargin.toFixed(1)}px;`);
-    }
-
-    _calculateAlarmDotSize(fontSize) {
-        const baseFontSize = 1.8;
-        const baseDotSize = 7;
-        return Math.max(4, Math.min(14, baseDotSize * (fontSize / baseFontSize)));
-    }
-
-    _calculateAlarmDotMargin(dotSize) {
-        const baseDotSize = 7;
-        const baseDotMargin = 6;
-        return (dotSize / baseDotSize) * baseDotMargin;
-    }
-
-    _calculateShadow(colorType, glow, theme, fontSize) {
-        if (colorType === 'gray' && glow >= 1) {
-            const shadowOffset = this._calculateShadowExtent(glow, colorType, fontSize);
-            return `${shadowOffset.toFixed(1)}px ${shadowOffset.toFixed(1)}px 0 rgba(80, 80, 80, 0.6)`;
-        }
-        
-        if (glow > 0) {
-            const sizeScale = this._calculateSizeScale(fontSize);
-            const shadowOpacity = Math.min(1, glow / 8);
-            const shadowBlur = (2 + shadowOpacity * 10) * sizeScale;
-            const maxBlur = this._calculateShadowExtent(glow, colorType, fontSize);
-            return `0 0 ${shadowBlur.toFixed(1)}px ${theme.glow}, 0 0 ${maxBlur.toFixed(1)}px ${theme.glow}`;
-        }
-        
-        return 'none';
     }
 
     _getPlaceholderText(showSeconds, showDate, isWidget) {
