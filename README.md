@@ -20,13 +20,17 @@ Repository mirrors: [GitLab](https://gitlab.com/corral1976/gnome-shell-extension
 
 - 7-segment LCD style clock
 - 4 font styles: Regular, Bold, Italic and Bold Italic, applied live from the preferences window
-- 8 color themes: neon green, amber, retro gray, ruby, sapphire, white, violet and gold
+- 10 color themes: neon green, amber, retro gray, ruby, sapphire, white, violet, gold, VFD teal and Nixie orange
 - Custom color picker for digits, separators, alarm dot and border, with a live preview in the preferences window
 - Multiple alarms with sound, custom labels and snooze support
 - Built-in preferences panel (GTK4/Adwaita), organized into General, Appearance, Alarms and About tabs
 - Looks good in both light and dark shell themes
 - Desktop widget mode (draggable) or docked to the panel
 - Optional flicker effect, for that old-LCD-screen feel
+- Ghost segments: faint always-on digit pattern behind the active time, like a real LCD
+- Lamp test on startup: briefly flashes all segments when the extension loads
+- Minute flicker: a subtle brightness dip whenever the minute changes
+- CRT scanlines overlay, for a retro tube/VFD look
 
 ---
 

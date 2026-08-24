@@ -21,7 +21,9 @@ const PRESET_COLORS = {
     sapphire: '#0088ff',
     white: '#ffffff',
     violet: '#8b5cf6',
-    gold: '#ffd700'
+    gold: '#ffd700',
+    teal: '#00e5c7',
+    orange: '#ff7518'
 };
 
 const RETRO_MAIN_COLOR = '#000000';
@@ -284,7 +286,7 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
         });
         behaviorGroup.add(positionRow);
 
-        const colorKeys = ['green', 'amber', 'gray', 'ruby', 'sapphire', 'white', 'violet', 'gold', 'custom'];
+        const colorKeys = ['green', 'amber', 'gray', 'ruby', 'sapphire', 'white', 'violet', 'gold', 'teal', 'orange', 'custom'];
 
         const previewArea = new Gtk.DrawingArea({
             content_width: 260,
@@ -357,7 +359,7 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
         const colorRow = new Adw.ComboRow({
             title: _('Color Theme'),
             subtitle: _('Choose your preferred LCD color style'),
-            model: new Gtk.StringList({ strings: [_('Neon Green'), _('Vintage Amber'), _('Retro LCD'), _('Red Ruby'), _('Blue Sapphire'), _('White LED'), _('Violet Purple'), _('Gold'), _('Custom Color')] }),
+            model: new Gtk.StringList({ strings: [_('Neon Green'), _('Vintage Amber'), _('Retro LCD'), _('Red Ruby'), _('Blue Sapphire'), _('White LED'), _('Violet Purple'), _('Gold'), _('VFD Teal'), _('Nixie Orange'), _('Custom Color')] }),
             selected: colorKeys.indexOf(settings.get_string('clock-color'))
         });
         colorGroup.add(colorRow);
@@ -489,6 +491,62 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
         });
         flickerRow.add_suffix(flickerSwitch);
         textGroup.add(flickerRow);
+
+        const ghostRow = new Adw.ActionRow({
+            title: _('Ghost Segments'),
+            subtitle: _('Show the unlit 7-segment pattern faintly behind the digits')
+        });
+        const ghostSwitch = new Gtk.Switch({
+            active: settings.get_boolean('ghost-segments'),
+            valign: Gtk.Align.CENTER
+        });
+        ghostSwitch.connect('notify::active', (w) => {
+            settings.set_boolean('ghost-segments', w.active);
+        });
+        ghostRow.add_suffix(ghostSwitch);
+        textGroup.add(ghostRow);
+
+        const lampTestRow = new Adw.ActionRow({
+            title: _('Lamp Test on Startup'),
+            subtitle: _('Briefly flash all segments when the extension starts')
+        });
+        const lampTestSwitch = new Gtk.Switch({
+            active: settings.get_boolean('startup-lamp-test'),
+            valign: Gtk.Align.CENTER
+        });
+        lampTestSwitch.connect('notify::active', (w) => {
+            settings.set_boolean('startup-lamp-test', w.active);
+        });
+        lampTestRow.add_suffix(lampTestSwitch);
+        textGroup.add(lampTestRow);
+
+        const minuteFlickerRow = new Adw.ActionRow({
+            title: _('Minute Flicker'),
+            subtitle: _('Dip the brightness briefly whenever the minute changes')
+        });
+        const minuteFlickerSwitch = new Gtk.Switch({
+            active: settings.get_boolean('minute-flicker'),
+            valign: Gtk.Align.CENTER
+        });
+        minuteFlickerSwitch.connect('notify::active', (w) => {
+            settings.set_boolean('minute-flicker', w.active);
+        });
+        minuteFlickerRow.add_suffix(minuteFlickerSwitch);
+        textGroup.add(minuteFlickerRow);
+
+        const scanlinesRow = new Adw.ActionRow({
+            title: _('CRT Scanlines'),
+            subtitle: _('Overlay faint horizontal scanlines for a CRT/VFD look')
+        });
+        const scanlinesSwitch = new Gtk.Switch({
+            active: settings.get_boolean('crt-scanlines'),
+            valign: Gtk.Align.CENTER
+        });
+        scanlinesSwitch.connect('notify::active', (w) => {
+            settings.set_boolean('crt-scanlines', w.active);
+        });
+        scanlinesRow.add_suffix(scanlinesSwitch);
+        textGroup.add(scanlinesRow);
 
         const alarmGroup = new Adw.PreferencesGroup({
             title: _('Alarms'),
