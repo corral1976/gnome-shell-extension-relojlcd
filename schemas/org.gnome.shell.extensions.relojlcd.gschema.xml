@@ -16,6 +16,8 @@
         <choice value="white"/>
         <choice value="violet"/>
         <choice value="gold"/>
+        <choice value="teal"/>
+        <choice value="orange"/>
         <choice value="custom"/>
       </choices>
       <default>'green'</default>
@@ -137,6 +139,26 @@
       <default>'regular'</default>
       <summary>Font style</summary>
       <description>Choose the font style (synthetic bold/italic by Pango)</description>
+    </key>
+    <key name="ghost-segments" type="b">
+      <default>false</default>
+      <summary>Ghost segments</summary>
+      <description>Show the unlit 7-segment pattern faintly behind the active digits</description>
+    </key>
+    <key name="startup-lamp-test" type="b">
+      <default>false</default>
+      <summary>Lamp test on startup</summary>
+      <description>Briefly flash all segments at full brightness when the extension starts</description>
+    </key>
+    <key name="minute-flicker" type="b">
+      <default>false</default>
+      <summary>Minute flicker</summary>
+      <description>Dip the display brightness briefly whenever the minute changes</description>
+    </key>
+    <key name="crt-scanlines" type="b">
+      <default>false</default>
+      <summary>CRT scanlines</summary>
+      <description>Overlay faint horizontal scanlines across the display for a CRT/VFD look</description>
     </key>
   </schema>
 </schemalist>

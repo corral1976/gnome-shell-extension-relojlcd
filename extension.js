@@ -63,8 +63,31 @@ const THEME_MAP = {
         bg: 'rgba(255, 215, 0, 0.2)',
         border: '#ffd700',
         glow: 'rgba(255, 215, 0, 0.8)'
+    },
+    teal: {
+        main: '#00e5c7',
+        bg: 'rgba(0, 229, 199, 0.2)',
+        border: '#00e5c7',
+        glow: 'rgba(0, 229, 199, 0.8)'
+    },
+    orange: {
+        main: '#ff7518',
+        bg: 'rgba(255, 117, 24, 0.2)',
+        border: '#ff7518',
+        glow: 'rgba(255, 117, 24, 0.8)'
     }
 };
+
+const GHOST_SEGMENTS_OPACITY = 30;
+const LAMP_TEST_PEAK_OPACITY = 220;
+const LAMP_TEST_PAUSE_MS = 1800;
+const LAMP_TEST_FADE_MS = 700;
+const MINUTE_FLICKER_DIP_OPACITY = 90;
+const MINUTE_FLICKER_DIP_MS = 60;
+const MINUTE_FLICKER_RESTORE_MS = 140;
+const SCANLINES_OPACITY = 0.15;
+const SCANLINES_LINE_RATIO = 0.08;
+const SCANLINES_MIN_SPACING = 2;
 
 const FLICKER_THRESHOLDS = {
     white: [
@@ -120,6 +143,13 @@ export default class RelojLCDExtension extends Extension {
         this._alarmDotShadow = null;
         this._alarmDotWrapper = null;
         this._themeContextId = null;
+        this._ghostLabel = null;
+        this._lastAppliedGhostStyle = null;
+        this._lampTestTimeoutId = null;
+        this._lastMinute = -1;
+        this._scanlinesActor = null;
+        this._scanlinesLastHeight = 0;
+        this._displayWrapper = null;
 
         this._migrateLegacyAlarm();
         this._alarms = this._parseAlarms();
@@ -143,17 +173,21 @@ export default class RelojLCDExtension extends Extension {
             'changed::font-style', () => { this._invalidateStyleCache(); this._updateStyle(); },
             'changed::test-alarm-counter', () => this._startTestSound(),
             'changed::test-alarm-stop-counter', () => this._stopTestSound(),
+            'changed::ghost-segments', () => { this._updateGhostOpacity(); this._updateAlarmDot(); },
+            'changed::crt-scanlines', () => this._updateScanlines(),
             this
         );
 
         this._updateClock();
         this._updateFlicker();
+        this._runLampTest();
     }
 
     _invalidateStyleCache() {
         this._lastAppliedStyle = null;
         this._lastAppliedShadowStyle = null;
         this._lastAppliedContainerStyle = null;
+        this._lastAppliedGhostStyle = null;
     }
 
     _parseAlarms() {
@@ -238,7 +272,11 @@ export default class RelojLCDExtension extends Extension {
         this._clockContainer = null;
         this._clockLabel = null;
         this._shadowLabel = null;
+        this._ghostLabel = null;
+        this._scanlinesActor = null;
+        this._scanlinesLastHeight = 0;
         this._container = null;
+        this._displayWrapper = null;
         this._alarmDot = null;
         this._alarmDotShadow = null;
         this._alarmDotWrapper = null;
@@ -257,6 +295,11 @@ export default class RelojLCDExtension extends Extension {
         this._removeClockTimeout();
         this._removeFlickerTimeout();
         this._removeStyleUpdateDebounce();
+
+        if (this._lampTestTimeoutId) {
+            GLib.Source.remove(this._lampTestTimeoutId);
+            this._lampTestTimeoutId = null;
+        }
 
         if (this._themeContextId) {
             const themeContext = St.ThemeContext.get_for_stage(global.stage);
@@ -280,6 +323,17 @@ export default class RelojLCDExtension extends Extension {
             this._shadowLabel.destroy();
             this._shadowLabel = null;
         }
+
+        if (this._ghostLabel) {
+            this._ghostLabel.destroy();
+            this._ghostLabel = null;
+        }
+
+        if (this._scanlinesActor) {
+            this._scanlinesActor.destroy();
+            this._scanlinesActor = null;
+        }
+        this._scanlinesLastHeight = 0;
 
         if (this._alarmDot) {
             this._alarmDot.destroy();
@@ -306,6 +360,11 @@ export default class RelojLCDExtension extends Extension {
             this._container = null;
         }
 
+        if (this._displayWrapper) {
+            this._displayWrapper.destroy();
+            this._displayWrapper = null;
+        }
+
         if (this._indicator) {
             if (this._isChromeIndicator) Main.layoutManager.removeChrome(this._indicator);
             this._indicator.destroy();
@@ -320,6 +379,7 @@ export default class RelojLCDExtension extends Extension {
         this._pendingAlarms = [];
         this._lastAlarmStamps.clear();
         this._lastCheckedTime = null;
+        this._lastMinute = -1;
     }
 
     _removeClockTimeout() {
@@ -413,6 +473,62 @@ export default class RelojLCDExtension extends Extension {
         this._addFlickerTimeout(100, flicker);
     }
 
+    _updateGhostOpacity() {
+        if (!this._ghostLabel) return;
+        this._ghostLabel.set_opacity(this._settings.get_boolean('ghost-segments') ? GHOST_SEGMENTS_OPACITY : 0);
+    }
+
+    _updateScanlines() {
+        if (!this._scanlinesActor) return;
+        this._scanlinesActor.visible = this._settings.get_boolean('crt-scanlines');
+    }
+
+    _rebuildScanlines(height) {
+        this._scanlinesActor.remove_all_children();
+
+        const lineSpacing = Math.max(SCANLINES_MIN_SPACING, Math.round(height * SCANLINES_LINE_RATIO));
+        const barCount = Math.floor(height / lineSpacing);
+        this._scanlinesActor.layout_manager.spacing = Math.max(0, lineSpacing - 1);
+
+        for (let i = 0; i < barCount; i++) {
+            this._scanlinesActor.add_child(new St.Widget({
+                style: `background-color: rgba(0, 0, 0, ${SCANLINES_OPACITY}); height: 1px;`,
+                x_expand: true
+            }));
+        }
+    }
+
+    _runLampTest() {
+        if (!this._settings.get_boolean('startup-lamp-test') || !this._ghostLabel) return;
+
+        this._ghostLabel.set_opacity(LAMP_TEST_PEAK_OPACITY);
+
+        this._lampTestTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, LAMP_TEST_PAUSE_MS, () => {
+            this._lampTestTimeoutId = null;
+            this._ghostLabel?.ease({
+                opacity: this._settings.get_boolean('ghost-segments') ? GHOST_SEGMENTS_OPACITY : 0,
+                duration: LAMP_TEST_FADE_MS,
+                mode: Clutter.AnimationMode.EASE_IN_QUAD
+            });
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    _playMinuteFlicker() {
+        this._clockLabel.ease({
+            opacity: MINUTE_FLICKER_DIP_OPACITY,
+            duration: MINUTE_FLICKER_DIP_MS,
+            mode: Clutter.AnimationMode.EASE_IN_QUAD,
+            onComplete: () => {
+                this._clockLabel?.ease({
+                    opacity: 255,
+                    duration: MINUTE_FLICKER_RESTORE_MS,
+                    mode: Clutter.AnimationMode.EASE_OUT_QUAD
+                });
+            }
+        });
+    }
+
     _setupDragHandlers(actor) {
         this._connect(actor, 'button-press-event', (actor, event) => {
             if (this._isAlarming) {
@@ -497,15 +613,46 @@ export default class RelojLCDExtension extends Extension {
             style_class: 'reloj-lcd-shadow-label'
         });
 
+        this._ghostLabel = new St.Label({
+            text: this._getPlaceholderText(showSeconds, showDate, isWidget),
+            y_align: Clutter.ActorAlign.CENTER,
+            x_align: Clutter.ActorAlign.CENTER,
+            x_expand: true,
+            y_expand: true,
+            opacity: 0,
+            style_class: 'reloj-lcd-ghost-label'
+        });
+
+        this._scanlinesActor = new St.Widget({
+            layout_manager: new Clutter.BoxLayout({ orientation: Clutter.Orientation.VERTICAL }),
+            reactive: false,
+            visible: this._settings.get_boolean('crt-scanlines'),
+            x_expand: true,
+            y_expand: true,
+            clip_to_allocation: true
+        });
+
+        this._connect(this._scanlinesActor, 'notify::allocation', () => {
+            const [, height] = this._scanlinesActor.get_size();
+            const roundedHeight = Math.round(height);
+            if (roundedHeight > 0 && roundedHeight !== this._scanlinesLastHeight) {
+                this._scanlinesLastHeight = roundedHeight;
+                this._rebuildScanlines(roundedHeight);
+            }
+        });
+
         this._clockContainer = new St.Widget({
             layout_manager: new Clutter.BinLayout(),
             offscreen_redirect: Clutter.OffscreenRedirect.ALWAYS
         });
 
+        this._clockContainer.add_child(this._ghostLabel);
         this._clockContainer.add_child(this._shadowLabel);
         this._clockContainer.add_child(this._clockLabel);
+        this._ghostLabel.set_reactive(false);
         this._shadowLabel.set_reactive(false);
         this._clockLabel.set_reactive(false);
+        this._clockContainer.set_child_above_sibling(this._shadowLabel, this._ghostLabel);
         this._clockContainer.set_child_above_sibling(this._clockLabel, this._shadowLabel);
         this._clockLabel.show();
 
@@ -543,12 +690,21 @@ export default class RelojLCDExtension extends Extension {
             style_class: 'reloj-lcd-container',
             vertical: false,
             offscreen_redirect: Clutter.OffscreenRedirect.ALWAYS,
-            clip_to_allocation: true
+            clip_to_allocation: true,
+            x_expand: true,
+            y_expand: true
         });
 
         this._container.add_child(this._alarmDotWrapper);
         this._container.add_child(this._clockContainer);
         this._updateAlarmDot();
+
+        this._displayWrapper = new St.Widget({
+            layout_manager: new Clutter.BinLayout()
+        });
+        this._displayWrapper.add_child(this._container);
+        this._displayWrapper.add_child(this._scanlinesActor);
+        this._displayWrapper.set_child_above_sibling(this._scanlinesActor, this._container);
 
         if (isWidget) {
             this._indicator = new St.Bin({
@@ -559,7 +715,7 @@ export default class RelojLCDExtension extends Extension {
                 y: this._settings.get_int('widget-y'),
                 style: 'opacity: 1.0; -st-shadow: none;'
             });
-            this._indicator.set_child(this._container);
+            this._indicator.set_child(this._displayWrapper);
             this._setupDragHandlers(this._indicator);
             Main.layoutManager.addChrome(this._indicator);
             this._isChromeIndicator = true;
@@ -567,9 +723,9 @@ export default class RelojLCDExtension extends Extension {
             this._isChromeIndicator = false;
             const pos = this._settings.get_string('panel-position');
             this._indicator = new PanelMenu.Button(0.5, 'RelojLCD', true);
-            this._container.y_align = Clutter.ActorAlign.CENTER;
-            this._container.y_expand = false;
-            this._indicator.add_child(this._container);
+            this._displayWrapper.y_align = Clutter.ActorAlign.CENTER;
+            this._displayWrapper.y_expand = false;
+            this._indicator.add_child(this._displayWrapper);
 
             this._connect(this._indicator, 'button-press-event', (actor, event) => {
                 if (this._isAlarming) {
@@ -623,6 +779,13 @@ export default class RelojLCDExtension extends Extension {
             const glow = this._settings.get_double('glow-intensity');
 
             const timeStr = this._formatTime(now, is24h, showSeconds, showDate, isWidget, blink);
+
+            const currentMinute = now.get_minute();
+            if (this._settings.get_boolean('minute-flicker') && !this._isAlarming &&
+                this._lastMinute !== -1 && currentMinute !== this._lastMinute) {
+                this._playMinuteFlicker();
+            }
+            this._lastMinute = currentMinute;
 
             this._clockLabel.set_text(timeStr);
             if (this._shadowLabel && colorType === 'gray' && glow >= 1) {
@@ -681,7 +844,14 @@ export default class RelojLCDExtension extends Extension {
 
     _updateAlarmDot() {
         if (!this._alarmDotWrapper || !this._settings) return;
-        this._alarmDotWrapper.visible = this._alarms.some(alarm => alarm.enabled);
+
+        const hasEnabledAlarm = this._alarms.some(alarm => alarm.enabled);
+        const ghostEnabled = this._settings.get_boolean('ghost-segments');
+
+        this._alarmDotWrapper.visible = hasEnabledAlarm || ghostEnabled;
+        if (this._alarmDot) {
+            this._alarmDot.opacity = hasEnabledAlarm ? 255 : GHOST_SEGMENTS_OPACITY;
+        }
     }
 
     _disableOneTimeAlarm(alarm) {
@@ -880,8 +1050,29 @@ export default class RelojLCDExtension extends Extension {
         const containerStyle = this._buildContainerStyle(config, theme);
         const clockStyle = this._buildClockStyle(config, theme);
         const shadowStyle = this._buildShadowStyle(config, shadow);
-        
+        const ghostStyle = this._buildGhostStyle(config, theme);
+
+        this._updateGhostLabel(config, ghostStyle);
         this._applyStyles(containerStyle, clockStyle, shadowStyle, theme, config, shadow);
+    }
+
+    _buildGhostStyle(config, theme) {
+        const baseProps = this._buildBaseStyleProps(config);
+        const props = [...baseProps];
+        props.push(`color: ${theme.main}`);
+        props.push(`z-index: 0`);
+        return props.join('; ') + ';';
+    }
+
+    _updateGhostLabel(config, ghostStyle) {
+        if (!this._ghostLabel) return;
+
+        this._ghostLabel.set_text(this._getPlaceholderText(config.showSeconds, config.showDate, config.isWidget));
+        this._updateGhostOpacity();
+
+        if (this._lastAppliedGhostStyle === ghostStyle) return;
+        this._lastAppliedGhostStyle = ghostStyle;
+        this._ghostLabel.set_style(ghostStyle);
     }
 
     _getStyleConfig() {
