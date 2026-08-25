@@ -23,6 +23,7 @@ Repository mirrors: [GitLab](https://gitlab.com/corral1976/gnome-shell-extension
 - 10 color themes: neon green, amber, retro gray, ruby, sapphire, white, violet, gold, VFD teal and Nixie orange
 - Custom color picker for digits, separators, alarm dot and border, with a live preview in the preferences window
 - Multiple alarms with sound, custom labels and snooze support
+- On-screen alarm dialog, so a ringing alarm isn't missed if notifications are silenced (e.g. Do Not Disturb)
 - Built-in preferences panel (GTK4/Adwaita), organized into General, Appearance, Alarms and About tabs
 - Looks good in both light and dark shell themes
 - Desktop widget mode (draggable) or docked to the panel

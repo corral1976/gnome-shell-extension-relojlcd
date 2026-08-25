@@ -3,9 +3,11 @@ import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import St from 'gi://St';
 import Atk from 'gi://Atk';
+import GObject from 'gi://GObject';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
+import { ModalDialog } from 'resource:///org/gnome/shell/ui/modalDialog.js';
 import { Extension, gettext as _ } from 'resource:///org/gnome/shell/extensions/extension.js';
 import { buildCustomTheme } from './colorUtils.js';
 import {
@@ -110,6 +112,32 @@ const FLICKER_THRESHOLDS = {
     ]
 };
 
+const AlarmDialog = GObject.registerClass(
+{ GTypeName: 'RelojLCDAlarmDialog' },
+class AlarmDialog extends ModalDialog {
+    _init(alarm, onSnooze, onDismiss) {
+        super._init({ styleClass: 'reloj-lcd-alarm-dialog' });
+
+        this.contentLayout.add_child(new St.Label({
+            text: alarm.label || _('Alarm'),
+            style_class: 'reloj-lcd-alarm-dialog-label',
+            x_align: Clutter.ActorAlign.CENTER
+        }));
+
+        this.setButtons([
+            {
+                label: _('Snooze'),
+                action: onSnooze
+            },
+            {
+                label: _('Dismiss'),
+                action: onDismiss,
+                default: true
+            }
+        ]);
+    }
+});
+
 export default class RelojLCDExtension extends Extension {
     enable() {
         this._settings = this.getSettings();
@@ -119,6 +147,7 @@ export default class RelojLCDExtension extends Extension {
         this._pendingAlarms = [];
         this._snoozeTimeoutIds = new Map();
         this._activeNotification = null;
+        this._alarmDialog = null;
         this._lastCheckedTime = null;
         this._dotState = true;
         this._alarmBlinkState = true;
@@ -314,56 +343,36 @@ export default class RelojLCDExtension extends Extension {
 
         this._disconnectIndicatorSignals();
 
-        if (this._clockLabel) {
-            this._clockLabel.destroy();
-            this._clockLabel = null;
-        }
+        this._clockLabel?.destroy();
+        this._clockLabel = null;
 
-        if (this._shadowLabel) {
-            this._shadowLabel.destroy();
-            this._shadowLabel = null;
-        }
+        this._shadowLabel?.destroy();
+        this._shadowLabel = null;
 
-        if (this._ghostLabel) {
-            this._ghostLabel.destroy();
-            this._ghostLabel = null;
-        }
+        this._ghostLabel?.destroy();
+        this._ghostLabel = null;
 
-        if (this._scanlinesActor) {
-            this._scanlinesActor.destroy();
-            this._scanlinesActor = null;
-        }
+        this._scanlinesActor?.destroy();
+        this._scanlinesActor = null;
         this._scanlinesLastHeight = 0;
 
-        if (this._alarmDot) {
-            this._alarmDot.destroy();
-            this._alarmDot = null;
-        }
+        this._alarmDot?.destroy();
+        this._alarmDot = null;
 
-        if (this._alarmDotShadow) {
-            this._alarmDotShadow.destroy();
-            this._alarmDotShadow = null;
-        }
+        this._alarmDotShadow?.destroy();
+        this._alarmDotShadow = null;
 
-        if (this._alarmDotWrapper) {
-            this._alarmDotWrapper.destroy();
-            this._alarmDotWrapper = null;
-        }
+        this._alarmDotWrapper?.destroy();
+        this._alarmDotWrapper = null;
 
-        if (this._clockContainer) {
-            this._clockContainer.destroy();
-            this._clockContainer = null;
-        }
+        this._clockContainer?.destroy();
+        this._clockContainer = null;
 
-        if (this._container) {
-            this._container.destroy();
-            this._container = null;
-        }
+        this._container?.destroy();
+        this._container = null;
 
-        if (this._displayWrapper) {
-            this._displayWrapper.destroy();
-            this._displayWrapper = null;
-        }
+        this._displayWrapper?.destroy();
+        this._displayWrapper = null;
 
         if (this._indicator) {
             if (this._isChromeIndicator) Main.layoutManager.removeChrome(this._indicator);
@@ -536,7 +545,7 @@ export default class RelojLCDExtension extends Extension {
                 return Clutter.EVENT_STOP;
             }
 
-            if (event.get_button() === 1) {
+            if (event.get_button() === Clutter.BUTTON_PRIMARY) {
                 let [x, y] = event.get_coords();
                 let [sx, sy] = actor.get_transformed_position();
                 let grabX = x - sx;
@@ -547,17 +556,17 @@ export default class RelojLCDExtension extends Extension {
                 this._dragHandler = actor.connect('motion-event', (dragActor, motionEvent) => {
                     let [mx, my] = motionEvent.get_coords();
                     let [width, height] = dragActor.get_size();
-                    let monitor = global.display.get_monitor_geometry(global.display.get_primary_monitor());
-                    
-                    let newX = Math.max(0, Math.min(mx - grabX, monitor.width - width));
-                    let newY = Math.max(0, Math.min(my - grabY, monitor.height - height));
-                    
+                    let monitor = Main.layoutManager.currentMonitor;
+
+                    let newX = Math.max(monitor.x, Math.min(mx - grabX, monitor.x + monitor.width - width));
+                    let newY = Math.max(monitor.y, Math.min(my - grabY, monitor.y + monitor.height - height));
+
                     dragActor.set_position(newX, newY);
                     return Clutter.EVENT_STOP;
                 });
 
                 this._releaseHandler = actor.connect('button-release-event', (dragActor, releaseEvent) => {
-                    if (releaseEvent.get_button() === 1) {
+                    if (releaseEvent.get_button() === Clutter.BUTTON_PRIMARY) {
                         let [newX, newY] = dragActor.get_position();
                         this._settings.set_int('widget-x', newX);
                         this._settings.set_int('widget-y', newY);
@@ -581,7 +590,7 @@ export default class RelojLCDExtension extends Extension {
                 return Clutter.EVENT_STOP;
             }
 
-            if (event.get_button() === 3) {
+            if (event.get_button() === Clutter.BUTTON_SECONDARY) {
                 this.openPreferences();
                 return Clutter.EVENT_STOP;
             }
@@ -688,7 +697,7 @@ export default class RelojLCDExtension extends Extension {
 
         this._container = new St.BoxLayout({
             style_class: 'reloj-lcd-container',
-            vertical: false,
+            orientation: Clutter.Orientation.HORIZONTAL,
             offscreen_redirect: Clutter.OffscreenRedirect.ALWAYS,
             clip_to_allocation: true,
             x_expand: true,
@@ -933,7 +942,11 @@ export default class RelojLCDExtension extends Extension {
         this._isAlarming = true;
         this._alarmSoundCancellable = new Gio.Cancellable();
 
-        this._showAlarmNotification(alarm);
+        if (this._settings.get_boolean('alarm-dialog-enabled')) {
+            this._showAlarmDialog(alarm);
+        } else {
+            this._showAlarmNotification(alarm);
+        }
         this._playAlarmSound();
 
         if (this._alarmSoundTimeoutId) GLib.Source.remove(this._alarmSoundTimeoutId);
@@ -980,6 +993,15 @@ export default class RelojLCDExtension extends Extension {
         source.addNotification(notification);
     }
 
+    _showAlarmDialog(alarm) {
+        this._alarmDialog = new AlarmDialog(
+            alarm,
+            () => this._snoozeAlarm(alarm),
+            () => this._stopAlarm()
+        );
+        this._alarmDialog.open();
+    }
+
     _snoozeAlarm(alarm) {
         this._stopAlarm();
 
@@ -1018,9 +1040,12 @@ export default class RelojLCDExtension extends Extension {
             this._blinkTimeoutId = null;
         }
 
-        if (this._activeNotification) {
-            this._activeNotification.destroy();
-            this._activeNotification = null;
+        this._activeNotification?.destroy();
+        this._activeNotification = null;
+
+        if (this._alarmDialog) {
+            this._alarmDialog.close();
+            this._alarmDialog = null;
         }
 
         if (this._clockLabel) {
