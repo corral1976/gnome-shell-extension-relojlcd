@@ -790,6 +790,20 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
         snoozeRow.add_suffix(snoozeSpin);
         alarmSettingsGroup.add(snoozeRow);
 
+        const alarmDialogRow = new Adw.ActionRow({
+            title: _('On-Screen Alarm Dialog'),
+            subtitle: _('Show a dialog instead of a notification when an alarm rings, so it is not missed if notifications are silenced')
+        });
+        const alarmDialogSwitch = new Gtk.Switch({
+            active: settings.get_boolean('alarm-dialog-enabled'),
+            valign: Gtk.Align.CENTER
+        });
+        alarmDialogSwitch.connect('notify::active', (w) => {
+            settings.set_boolean('alarm-dialog-enabled', w.active);
+        });
+        alarmDialogRow.add_suffix(alarmDialogSwitch);
+        alarmSettingsGroup.add(alarmDialogRow);
+
         const aboutGroup = new Adw.PreferencesGroup({
             title: _('About'),
             description: _('Information and credits')

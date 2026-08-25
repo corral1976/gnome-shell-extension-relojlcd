@@ -44,3 +44,10 @@
     flex-grow: 0;
     align-self: center;
 }
+
+.reloj-lcd-alarm-dialog-label {
+    font-size: 24px;
+    font-weight: bold;
+    text-align: center;
+    margin: 12px 0;
+}

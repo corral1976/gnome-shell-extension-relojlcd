@@ -160,5 +160,10 @@
       <summary>CRT scanlines</summary>
       <description>Overlay faint horizontal scanlines across the display for a CRT/VFD look</description>
     </key>
+    <key name="alarm-dialog-enabled" type="b">
+      <default>true</default>
+      <summary>On-screen alarm dialog</summary>
+      <description>Show a modal on-screen dialog instead of a notification when an alarm triggers, so alarms are not missed when notifications are silenced (e.g. Do Not Disturb). When disabled, falls back to the regular notification.</description>
+    </key>
   </schema>
 </schemalist>
