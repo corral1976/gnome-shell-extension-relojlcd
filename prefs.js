@@ -55,7 +55,7 @@ function getPreviewColors(colorType, customHex) {
     return { main: base, border: base, bg: hexToRgba(base, 0.2), glow: hexToRgba(base, 0.8) };
 }
 
-function drawClockPreview(cr, width, height, colors, glowValue, isRetro, fontSize, showAlarmDot) {
+function drawClockPreview(cr, width, height, colors, glowValue, isRetro, fontSize, showAlarmDot, showFrame) {
     const radius = 10;
     const roundedRect = (x, y, w, h, r) => {
         cr.newSubPath();
@@ -69,12 +69,15 @@ function drawClockPreview(cr, width, height, colors, glowValue, isRetro, fontSiz
     const bg = rgbaStringTo01(colors.bg);
     roundedRect(4, 4, width - 8, height - 8, radius);
     cr.setSourceRGBA(bg.r, bg.g, bg.b, bg.a);
-    cr.fillPreserve();
-
-    const border = hexTo01(colors.border);
-    cr.setSourceRGBA(border.r, border.g, border.b, 1);
-    cr.setLineWidth(1.5);
-    cr.stroke();
+    if (showFrame) {
+        cr.fillPreserve();
+        const border = hexTo01(colors.border);
+        cr.setSourceRGBA(border.r, border.g, border.b, 1);
+        cr.setLineWidth(1.5);
+        cr.stroke();
+    } else {
+        cr.fill();
+    }
 
     if (glowValue > 0 && !isRetro) {
         const glow = hexTo01(colors.main);
@@ -298,7 +301,7 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
             const colors = getPreviewColors(colorType, settings.get_string('custom-color'));
             const previewFontSize = Math.min(settings.get_double('font-size'), PREVIEW_MAX_FONT_SIZE);
             const hasEnabledAlarm = parseAlarms(settings.get_string('alarms')).some(alarm => alarm.enabled);
-            drawClockPreview(cr, width, height, colors, settings.get_double('glow-intensity'), colorType === 'gray', previewFontSize, hasEnabledAlarm);
+            drawClockPreview(cr, width, height, colors, settings.get_double('glow-intensity'), colorType === 'gray', previewFontSize, hasEnabledAlarm, settings.get_boolean('show-frame'));
         });
 
         const previewLabel = new Gtk.Label({
@@ -426,6 +429,21 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
         });
         glowRow.add_suffix(glowSpin);
         colorGroup.add(glowRow);
+
+        const frameRow = new Adw.ActionRow({
+            title: _('Display Border'),
+            subtitle: _('Hide the border outline around the display; the background and glow stay visible')
+        });
+        const frameSwitch = new Gtk.Switch({
+            active: settings.get_boolean('show-frame'),
+            valign: Gtk.Align.CENTER
+        });
+        frameSwitch.connect('notify::active', (w) => {
+            settings.set_boolean('show-frame', w.active);
+            previewArea.queue_draw();
+        });
+        frameRow.add_suffix(frameSwitch);
+        colorGroup.add(frameRow);
 
         const textGroup = new Adw.PreferencesGroup({
             title: _('Font & Effects'),
@@ -862,6 +880,80 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
         });
         kofiRow.add_suffix(kofiButton);
         supportGroup.add(kofiRow);
+
+        const resetGroup = new Adw.PreferencesGroup({
+            title: _('Reset'),
+            description: _('Restore appearance and clock settings to their defaults. Your alarms are not affected.')
+        });
+        aboutPage.add(resetGroup);
+
+        const resetRow = new Adw.ActionRow({ title: _('Reset to Defaults') });
+        const resetButton = new Gtk.Button({
+            label: _('Reset'),
+            valign: Gtk.Align.CENTER,
+            css_classes: ['destructive-action']
+        });
+
+        const resetToDefaults = () => {
+            const keysToReset = [
+                'font-size', 'clock-color', 'custom-color', 'glow-intensity',
+                'clock-format-24h', 'show-seconds', 'show-date', 'panel-position',
+                'is-widget', 'flicker-enabled', 'font-style', 'ghost-segments',
+                'startup-lamp-test', 'minute-flicker', 'crt-scanlines', 'show-frame',
+                'blink-dots', 'snooze-minutes', 'alarm-dialog-enabled'
+            ];
+            for (const key of keysToReset)
+                settings.reset(key);
+
+            widgetSwitch.set_active(settings.get_boolean('is-widget'));
+            formatSwitch.set_active(settings.get_boolean('clock-format-24h'));
+            secondsSwitch.set_active(settings.get_boolean('show-seconds'));
+            dateSwitch.set_active(settings.get_boolean('show-date'));
+            positionRow.set_selected(['left', 'center', 'right'].indexOf(settings.get_string('panel-position')));
+
+            const color = settings.get_string('clock-color');
+            colorRow.set_selected(colorKeys.indexOf(color));
+            customColorRow.set_visible(color === 'custom');
+            const defaultRgba = new Gdk.RGBA();
+            defaultRgba.parse(settings.get_string('custom-color'));
+            colorButton.set_rgba(defaultRgba);
+            updateGlowLimit(color);
+            glowSpin.set_value(settings.get_double('glow-intensity'));
+            frameSwitch.set_active(settings.get_boolean('show-frame'));
+            fontSpin.set_value(settings.get_double('font-size'));
+            fontStyleRow.set_selected(fontStyleKeys.indexOf(settings.get_string('font-style')));
+            blinkSwitch.set_active(settings.get_boolean('blink-dots'));
+            flickerSwitch.set_active(settings.get_boolean('flicker-enabled'));
+            ghostSwitch.set_active(settings.get_boolean('ghost-segments'));
+            lampTestSwitch.set_active(settings.get_boolean('startup-lamp-test'));
+            minuteFlickerSwitch.set_active(settings.get_boolean('minute-flicker'));
+            scanlinesSwitch.set_active(settings.get_boolean('crt-scanlines'));
+            snoozeSpin.set_value(settings.get_int('snooze-minutes'));
+            alarmDialogSwitch.set_active(settings.get_boolean('alarm-dialog-enabled'));
+
+            previewArea.queue_draw();
+            updatePreviewLabel();
+        };
+
+        resetButton.connect('clicked', () => {
+            const dialog = new Adw.MessageDialog({
+                heading: _('Reset to Defaults?'),
+                body: _('This will restore appearance and clock settings to their defaults. Your alarms will not be affected.'),
+                transient_for: window,
+                modal: true
+            });
+            dialog.add_response('cancel', _('Cancel'));
+            dialog.add_response('reset', _('Reset'));
+            dialog.set_response_appearance('reset', Adw.ResponseAppearance.DESTRUCTIVE);
+            dialog.set_default_response('cancel');
+            dialog.set_close_response('cancel');
+            dialog.connect('response', (_dialog, response) => {
+                if (response === 'reset') resetToDefaults();
+            });
+            dialog.present();
+        });
+        resetRow.add_suffix(resetButton);
+        resetGroup.add(resetRow);
 
         window.add(generalPage);
         window.add(appearancePage);

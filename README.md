@@ -32,6 +32,7 @@ Repository mirrors: [GitLab](https://gitlab.com/corral1976/gnome-shell-extension
 - Lamp test on startup: briefly flashes all segments when the extension loads
 - Minute flicker: a subtle brightness dip whenever the minute changes
 - CRT scanlines overlay, for a retro tube/VFD look
+- Toggleable display border: hide just the outline, keeping the background and glow
 
 ---
 
