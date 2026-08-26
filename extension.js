@@ -12,7 +12,6 @@ import { Extension, gettext as _ } from 'resource:///org/gnome/shell/extensions/
 import { buildCustomTheme } from './colorUtils.js';
 import {
     calculateRetroShadowOffset,
-    calculateShadowExtent,
     calculateDigitShadow,
     calculateAlarmDotSize,
     calculateAlarmDotMargin
@@ -190,6 +189,7 @@ export default class RelojLCDExtension extends Extension {
             'changed::font-size', () => { this._invalidateStyleCache(); this._scheduleStyleUpdate(); },
             'changed::clock-color', () => { this._invalidateStyleCache(); this._updateStyle(); },
             'changed::custom-color', () => { this._invalidateStyleCache(); this._updateStyle(); },
+            'changed::show-frame', () => { this._invalidateStyleCache(); this._updateStyle(); },
             'changed::glow-intensity', () => { this._invalidateStyleCache(); this._scheduleStyleUpdate(); },
             'changed::show-seconds', () => { this._invalidateStyleCache(); this._updateClock(); this._updateStyle(); },
             'changed::show-date', () => { this._invalidateStyleCache(); this._updateClock(); this._updateStyle(); },
@@ -698,8 +698,7 @@ export default class RelojLCDExtension extends Extension {
         this._container = new St.BoxLayout({
             style_class: 'reloj-lcd-container',
             orientation: Clutter.Orientation.HORIZONTAL,
-            offscreen_redirect: Clutter.OffscreenRedirect.ALWAYS,
-            clip_to_allocation: true,
+            clip_to_allocation: false,
             x_expand: true,
             y_expand: true
         });
@@ -1113,6 +1112,7 @@ export default class RelojLCDExtension extends Extension {
             showDate: this._settings.get_boolean('show-date'),
             isWidget: this._settings.get_boolean('is-widget'),
             fontStyle: this._settings.get_string('font-style'),
+            showFrame: this._settings.get_boolean('show-frame'),
             horizontalPadding: this._calculateHorizontalPadding(fontSize, showSeconds, glow, colorType)
         };
     }
@@ -1123,7 +1123,10 @@ export default class RelojLCDExtension extends Extension {
         const minPadding = 6;
         const maxPadding = 50;
         const proportionalPadding = basePadding * (fontSize / baseFontSize);
-        const shadowSafetyMargin = calculateShadowExtent(glow, colorType, fontSize) + 4;
+        const isRetro = colorType === 'gray';
+        const shadowSafetyMargin = isRetro && glow >= 1
+            ? calculateRetroShadowOffset(glow, fontSize) + 4
+            : 0;
         const padding = Math.max(proportionalPadding, shadowSafetyMargin);
         return Math.max(minPadding, Math.min(maxPadding, padding));
     }
@@ -1150,14 +1153,17 @@ export default class RelojLCDExtension extends Extension {
     _buildContainerStyle(config, theme) {
         const props = [
             `background-color: ${theme.bg}`,
-            `border: 1px solid ${theme.border}`,
             `border-radius: 8px`,
             `box-shadow: ${this._calculateBoxShadow(config.colorType, config.glow, theme)}`,
             `padding: 2px ${config.horizontalPadding.toFixed(1)}px`,
             `position: relative`,
             `z-index: 10`
         ];
-        
+
+        if (config.showFrame) {
+            props.push(`border: 1px solid ${theme.border}`);
+        }
+
         if (config.showDate) {
             props.push(`text-align: center`);
             if (config.isWidget) {

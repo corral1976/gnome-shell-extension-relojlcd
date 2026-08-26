@@ -165,5 +165,10 @@
       <summary>On-screen alarm dialog</summary>
       <description>Show a modal on-screen dialog instead of a notification when an alarm triggers, so alarms are not missed when notifications are silenced (e.g. Do Not Disturb). When disabled, falls back to the regular notification.</description>
     </key>
+    <key name="show-frame" type="b">
+      <default>true</default>
+      <summary>Display border</summary>
+      <description>Show the border outline around the display. Disable to hide just the border line; the background and glow stay visible either way.</description>
+    </key>
   </schema>
 </schemalist>
