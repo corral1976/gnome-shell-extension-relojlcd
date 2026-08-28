@@ -4,7 +4,7 @@ import Gtk from 'gi://Gtk';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Gdk from 'gi://Gdk';
-import { isValidHex, hexToRgba } from './colorUtils.js';
+import { isValidHex, hexToRgba, PRESET_COLORS } from './colorUtils.js';
 import {
     calculateAlarmDotSize,
     calculateRetroShadowOffset,
@@ -13,18 +13,6 @@ import {
 
 const PREVIEW_MAX_FONT_SIZE = 4;
 const PREVIEW_BASE_FONT_PT = 11;
-
-const PRESET_COLORS = {
-    green: '#00ff00',
-    amber: '#ffb000',
-    ruby: '#ff5555',
-    sapphire: '#0088ff',
-    white: '#ffffff',
-    violet: '#8b5cf6',
-    gold: '#ffd700',
-    teal: '#00e5c7',
-    orange: '#ff7518'
-};
 
 const RETRO_MAIN_COLOR = '#000000';
 const RETRO_BORDER_COLOR = '#6a8a5a';

@@ -9,7 +9,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import { ModalDialog } from 'resource:///org/gnome/shell/ui/modalDialog.js';
 import { Extension, gettext as _ } from 'resource:///org/gnome/shell/extensions/extension.js';
-import { buildCustomTheme } from './colorUtils.js';
+import { buildCustomTheme, buildTheme, PRESET_COLORS } from './colorUtils.js';
 import {
     calculateRetroShadowOffset,
     calculateDigitShadow,
@@ -23,60 +23,9 @@ const THEME_MAP = {
         bg: 'rgba(120, 150, 100, 0.95)',
         border: '#6a8a5a'
     },
-    amber: {
-        main: '#ffb000',
-        bg: 'rgba(255, 176, 0, 0.2)',
-        border: '#ffb000',
-        glow: 'rgba(255, 176, 0, 0.8)'
-    },
-    green: {
-        main: '#00ff00',
-        bg: 'rgba(0, 255, 0, 0.2)',
-        border: '#00ff00',
-        glow: 'rgba(0, 255, 0, 0.8)'
-    },
-    ruby: {
-        main: '#ff5555',
-        bg: 'rgba(255, 85, 85, 0.2)',
-        border: '#ff5555',
-        glow: 'rgba(255, 85, 85, 0.8)'
-    },
-    sapphire: {
-        main: '#0088ff',
-        bg: 'rgba(0, 136, 255, 0.2)',
-        border: '#0088ff',
-        glow: 'rgba(0, 136, 255, 0.8)'
-    },
-    white: {
-        main: '#ffffff',
-        bg: 'rgba(255, 255, 255, 0.2)',
-        border: '#ffffff',
-        glow: 'rgba(255, 255, 255, 0.8)'
-    },
-    violet: {
-        main: '#8b5cf6',
-        bg: 'rgba(139, 92, 246, 0.2)',
-        border: '#8b5cf6',
-        glow: 'rgba(139, 92, 246, 0.8)'
-    },
-    gold: {
-        main: '#ffd700',
-        bg: 'rgba(255, 215, 0, 0.2)',
-        border: '#ffd700',
-        glow: 'rgba(255, 215, 0, 0.8)'
-    },
-    teal: {
-        main: '#00e5c7',
-        bg: 'rgba(0, 229, 199, 0.2)',
-        border: '#00e5c7',
-        glow: 'rgba(0, 229, 199, 0.8)'
-    },
-    orange: {
-        main: '#ff7518',
-        bg: 'rgba(255, 117, 24, 0.2)',
-        border: '#ff7518',
-        glow: 'rgba(255, 117, 24, 0.8)'
-    }
+    ...Object.fromEntries(
+        Object.entries(PRESET_COLORS).map(([key, hex]) => [key, buildTheme(hex)])
+    )
 };
 
 const GHOST_SEGMENTS_OPACITY = 30;
@@ -538,6 +487,21 @@ export default class RelojLCDExtension extends Extension {
         });
     }
 
+    _getClampedWidgetPosition() {
+        const x = this._settings.get_int('widget-x');
+        const y = this._settings.get_int('widget-y');
+
+        const isOnAnyMonitor = Main.layoutManager.monitors.some(monitor =>
+            x >= monitor.x && x < monitor.x + monitor.width &&
+            y >= monitor.y && y < monitor.y + monitor.height
+        );
+
+        if (isOnAnyMonitor) return [x, y];
+
+        const primary = Main.layoutManager.primaryMonitor;
+        return [primary.x + 100, primary.y + 100];
+    }
+
     _setupDragHandlers(actor) {
         this._connect(actor, 'button-press-event', (actor, event) => {
             if (this._isAlarming) {
@@ -715,12 +679,13 @@ export default class RelojLCDExtension extends Extension {
         this._displayWrapper.set_child_above_sibling(this._scanlinesActor, this._container);
 
         if (isWidget) {
+            const [widgetX, widgetY] = this._getClampedWidgetPosition();
             this._indicator = new St.Bin({
                 reactive: true,
                 can_focus: true,
                 track_hover: true,
-                x: this._settings.get_int('widget-x'),
-                y: this._settings.get_int('widget-y'),
+                x: widgetX,
+                y: widgetY,
                 style: 'opacity: 1.0; -st-shadow: none;'
             });
             this._indicator.set_child(this._displayWrapper);
