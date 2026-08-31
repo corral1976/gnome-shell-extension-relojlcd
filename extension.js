@@ -5,6 +5,7 @@ import St from 'gi://St';
 import Atk from 'gi://Atk';
 import GObject from 'gi://GObject';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
+import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import { ModalDialog } from 'resource:///org/gnome/shell/ui/modalDialog.js';
@@ -86,6 +87,89 @@ class AlarmDialog extends ModalDialog {
     }
 });
 
+const RelojLCDIndicator = GObject.registerClass(
+{ GTypeName: 'RelojLCDIndicator' },
+class RelojLCDIndicator extends PanelMenu.Button {
+    _init(settings, openPreferences, isAlarming, stopAlarm) {
+        super._init(0.5, 'RelojLCD', false);
+
+        this._settings = settings;
+        this._openPreferences = openPreferences;
+        this._isAlarming = isAlarming;
+        this._stopAlarm = stopAlarm;
+        this.menu.sourceActor = this;
+        this._colorMenuItems = new Map();
+
+        this._buildQuickColorMenu();
+
+        this._menuOpenStateId = this.menu.connect('open-state-changed', (menu, isOpen) => {
+            if (isOpen) this._refreshQuickColorMenu();
+        });
+
+        this._clickHandlerId = this.connect('button-release-event', () => {
+            if (this._isAlarming()) {
+                this._stopAlarm();
+                return Clutter.EVENT_STOP;
+            }
+
+            this.menu.toggle();
+            return Clutter.EVENT_STOP;
+        });
+    }
+
+    destroy() {
+        if (this._clickHandlerId) {
+            this.disconnect(this._clickHandlerId);
+            this._clickHandlerId = 0;
+        }
+        if (this._menuOpenStateId) {
+            this.menu.disconnect(this._menuOpenStateId);
+            this._menuOpenStateId = 0;
+        }
+        super.destroy();
+    }
+
+    _buildQuickColorMenu() {
+        const colorEntries = [
+            ['green', _('Neon Green')],
+            ['amber', _('Vintage Amber')],
+            ['gray', _('Retro LCD')],
+            ['ruby', _('Red Ruby')],
+            ['sapphire', _('Blue Sapphire')],
+            ['white', _('White LED')],
+            ['violet', _('Violet Purple')],
+            ['gold', _('Gold')],
+            ['teal', _('VFD Teal')],
+            ['orange', _('Nixie Orange')]
+        ];
+
+        for (const [key, label] of colorEntries) {
+            const item = new PopupMenu.PopupMenuItem(label);
+            const swatchHex = key === 'gray' ? '#6a8a5a' : (PRESET_COLORS[key] || '#ffffff');
+            item.label.set_style(`color: ${swatchHex}; font-weight: bold;`);
+            item.connect('activate', () => {
+                this._settings.set_string('clock-color', key);
+            });
+            this.menu.addMenuItem(item);
+            this._colorMenuItems.set(key, item);
+        }
+
+        this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+
+        const prefsItem = new PopupMenu.PopupMenuItem(_('More Settings…'));
+        prefsItem.connect('activate', () => this._openPreferences());
+        this.menu.addMenuItem(prefsItem);
+
+        this._refreshQuickColorMenu();
+    }
+
+    _refreshQuickColorMenu() {
+        const currentColor = this._settings.get_string('clock-color');
+        for (const [key, item] of this._colorMenuItems)
+            item.setOrnament(key === currentColor ? PopupMenu.Ornament.CHECK : PopupMenu.Ornament.NONE);
+    }
+});
+
 export default class RelojLCDExtension extends Extension {
     enable() {
         this._settings = this.getSettings();
@@ -123,6 +207,8 @@ export default class RelojLCDExtension extends Extension {
         this._ghostLabel = null;
         this._lastAppliedGhostStyle = null;
         this._lampTestTimeoutId = null;
+        this._lampTestMappedId = null;
+        this._lampTestIdleId = null;
         this._lastMinute = -1;
         this._scanlinesActor = null;
         this._scanlinesLastHeight = 0;
@@ -277,6 +363,16 @@ export default class RelojLCDExtension extends Extension {
         if (this._lampTestTimeoutId) {
             GLib.Source.remove(this._lampTestTimeoutId);
             this._lampTestTimeoutId = null;
+        }
+
+        if (this._lampTestMappedId) {
+            this._ghostLabel?.disconnect(this._lampTestMappedId);
+            this._lampTestMappedId = null;
+        }
+
+        if (this._lampTestIdleId) {
+            GLib.Source.remove(this._lampTestIdleId);
+            this._lampTestIdleId = null;
         }
 
         if (this._themeContextId) {
@@ -459,6 +555,27 @@ export default class RelojLCDExtension extends Extension {
     _runLampTest() {
         if (!this._settings.get_boolean('startup-lamp-test') || !this._ghostLabel) return;
 
+        if (this._ghostLabel.mapped) {
+            this._scheduleLampTest();
+            return;
+        }
+
+        this._lampTestMappedId = this._ghostLabel.connect('notify::mapped', () => {
+            this._ghostLabel.disconnect(this._lampTestMappedId);
+            this._lampTestMappedId = null;
+            this._scheduleLampTest();
+        });
+    }
+
+    _scheduleLampTest() {
+        this._lampTestIdleId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            this._lampTestIdleId = null;
+            this._startLampTest();
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    _startLampTest() {
         this._ghostLabel.set_opacity(LAMP_TEST_PEAK_OPACITY);
 
         this._lampTestTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, LAMP_TEST_PAUSE_MS, () => {
@@ -695,20 +812,16 @@ export default class RelojLCDExtension extends Extension {
         } else {
             this._isChromeIndicator = false;
             const pos = this._settings.get_string('panel-position');
-            this._indicator = new PanelMenu.Button(0.5, 'RelojLCD', true);
+            this._indicator = new RelojLCDIndicator(
+                this._settings,
+                () => this.openPreferences(),
+                () => this._isAlarming,
+                () => this._stopAlarm()
+            );
             this._displayWrapper.y_align = Clutter.ActorAlign.CENTER;
             this._displayWrapper.y_expand = false;
             this._indicator.add_child(this._displayWrapper);
 
-            this._connect(this._indicator, 'button-press-event', (actor, event) => {
-                if (this._isAlarming) {
-                    this._stopAlarm();
-                    return Clutter.EVENT_STOP;
-                } else {
-                    this.openPreferences();
-                    return Clutter.EVENT_PROPAGATE;
-                }
-            });
             Main.panel.addToStatusArea('relojlcd', this._indicator, 1, pos);
         }
 

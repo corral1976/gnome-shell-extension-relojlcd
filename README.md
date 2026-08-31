@@ -33,6 +33,7 @@ Repository mirrors: [GitLab](https://gitlab.com/corral1976/gnome-shell-extension
 - Minute flicker: a subtle brightness dip whenever the minute changes
 - CRT scanlines overlay, for a retro tube/VFD look
 - Toggleable display border: hide just the outline, keeping the background and glow
+- Quick color menu: click the panel indicator for instant theme switching without opening full Preferences
 
 ---
 
@@ -90,6 +91,38 @@ gnome-extensions-app
 Find "Retro LCD" in the list and flip its switch to on. The clock should appear right away.
 
 If nothing shows up after all this, try restarting your whole computer once before assuming something's wrong — that solves it most of the time.
+
+---
+
+## The clock shows plain numbers instead of the LCD font
+
+This is the most common issue, and it always comes down to the same thing: the bundled font
+(`DSEG7Classic-Regular.ttf`) didn't end up where the extension expects it, or GNOME Shell hadn't
+restarted since it got there. Go through these in order:
+
+**1. Check the font file actually made it to the right place.** Open a terminal and run:
+
+```bash
+ls ~/.local/share/gnome-shell/extensions/relojlcd@carlos/assets/
+```
+
+You should see `DSEG7Classic-Regular.ttf` and `alarm.ogg` listed. If that folder or file is
+missing, the copy step during installation didn't go through completely — repeat step 2 of the
+manual installation above, making sure the `cp -r * "$DEST/"` command actually finishes without
+errors (and that you were inside the extracted extension folder, with the `assets` folder visible,
+when you ran it).
+
+**2. Restart GNOME Shell (or log out and back in) *after* the font file is in place.** The
+extension loads the font when it starts, not while you're copying files — if you install the font
+and then reload the extension in the same step without a proper Shell restart, it may have already
+loaded before the file was fully in place. On X11: `Alt+F2`, type `r`, Enter. On Wayland: log out
+and log back in (the X11 shortcut won't do anything, so that's the sign you're on Wayland).
+
+**3. Turn the extension off and back on** in the Extensions app (`gnome-extensions-app`) after
+restarting — this forces it to reload the font from scratch.
+
+If you did all three and it still shows plain numbers, please open an issue with your GNOME Shell
+version (`gnome-shell --version`) and whether you're on X11 or Wayland (`echo $XDG_SESSION_TYPE`).
 
 ---
 
