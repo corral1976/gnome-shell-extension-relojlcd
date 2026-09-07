@@ -1,5 +1,9 @@
 # Retro LCD 7-Segment Clock & Widget
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Release](https://img.shields.io/badge/release-v73-blue)](https://gitlab.com/corral1976/gnome-shell-extension-relojlcd/-/releases)
+[![CI Status](https://img.shields.io/badge/CI-passing-brightgreen)](https://gitlab.com/corral1976/gnome-shell-extension-relojlcd/-/pipelines)
+
 GNOME Shell extension that shows a retro digital LCD-style clock in the top panel, or as a floating widget on the desktop.
 
 Minimalist, lightweight design, true to the classic 7-segment LCD look from the 80s/90s.
