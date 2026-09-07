@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libglib2.0-dev-bin
+      - name: Build schemas
+        run: glib-compile-schemas schemas
+      - name: Validate JSON
+        run: |
+          sudo apt-get install -y jq
+          jq empty metadata.json
