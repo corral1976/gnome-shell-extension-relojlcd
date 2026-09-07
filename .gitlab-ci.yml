@@ -11,7 +11,7 @@ build:extension:
   stage: build
   image: registry.fedoraproject.org/fedora:latest
   before_script:
-    - dnf install -y gnome-shell-extensions
+    - dnf install -y glib2-devel
   script:
     - glib-compile-schemas schemas
     - echo "Extension build completed"
