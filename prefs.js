@@ -4,15 +4,22 @@ import Gtk from 'gi://Gtk';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Gdk from 'gi://Gdk';
+import GdkPixbuf from 'gi://GdkPixbuf';
 import { isValidHex, hexToRgba, PRESET_COLORS } from './colorUtils.js';
+import { calculateRetroShadowOffset, RETRO_SHADOW_RGBA } from './renderMath.js';
 import {
-    calculateAlarmDotSize,
-    calculateRetroShadowOffset,
-    calculateDigitShadow
-} from './renderMath.js';
+    buildGlyphSvgMarkup,
+    resolveGlyphStyleOptions,
+    isBlankGlyph,
+    calculateCellPixelHeight,
+    calculateCellPixelWidth,
+    calculateRowPixelWidth
+} from './glyphAssets.js';
 
 const PREVIEW_MAX_FONT_SIZE = 4;
-const PREVIEW_BASE_FONT_PT = 11;
+const PREVIEW_TEXT = '88:88';
+const PREVIEW_ALARM_SLOT_RATIO = 0.15;
+const glyphTextEncoder = new TextEncoder();
 
 const RETRO_MAIN_COLOR = '#000000';
 const RETRO_BORDER_COLOR = '#6a8a5a';
@@ -25,6 +32,10 @@ function hexTo01(hex) {
         g: parseInt(clean.substring(2, 4), 16) / 255,
         b: parseInt(clean.substring(4, 6), 16) / 255
     };
+}
+
+function daysInMonth(year, month) {
+    return new Date(year, month, 0).getDate();
 }
 
 function rgbaStringTo01(str) {
@@ -40,10 +51,10 @@ function getPreviewColors(colorType, customHex) {
     const base = colorType === 'custom'
         ? (isValidHex(customHex) ? customHex : '#00ff00')
         : (PRESET_COLORS[colorType] || PRESET_COLORS.green);
-    return { main: base, border: base, bg: hexToRgba(base, 0.2), glow: hexToRgba(base, 0.8) };
+    return { main: base, border: base, bg: hexToRgba(base, 0.2) };
 }
 
-function drawClockPreview(cr, width, height, colors, glowValue, isRetro, fontSize, showAlarmDot, showFrame) {
+function drawPreviewChrome(cr, width, height, colors, glowValue, isRetro, showFrame) {
     const radius = 10;
     const roundedRect = (x, y, w, h, r) => {
         cr.newSubPath();
@@ -78,99 +89,84 @@ function drawClockPreview(cr, width, height, colors, glowValue, isRetro, fontSiz
             cr.stroke();
         }
     }
+}
 
-    if (showAlarmDot) {
-        const main = hexTo01(colors.main);
-        const dotDiameter = calculateAlarmDotSize(fontSize);
-        const dotRadius = dotDiameter / 2;
-        const cx = 16;
-        const cy = height / 2;
+// GTK-process counterpart of glyphTexture.js's GlyphTextureCache — that one
+// targets St.ImageContent/Cogl, unavailable outside the Shell process.
+function rasterizeGlyph(cache, char, color, pixelWidth, pixelHeight, options) {
+    const width = Math.max(1, Math.round(pixelWidth));
+    const height = Math.max(1, Math.round(pixelHeight));
+    const key = `${char}|${color}|${width}|${height}|${options.italic ? 1 : 0}${options.bold ? 1 : 0}`;
 
-        if (isRetro && glowValue >= 1) {
-            const shadowOffset = calculateRetroShadowOffset(glowValue, fontSize);
-            cr.arc(cx + shadowOffset, cy + shadowOffset, dotRadius, 0, 2 * Math.PI);
-            cr.setSourceRGBA(80 / 255, 80 / 255, 80 / 255, 0.6);
-            cr.fill();
+    let pixbuf = cache.get(key);
+    if (pixbuf) return pixbuf;
+
+    const markup = buildGlyphSvgMarkup(char, color, options);
+    if (!markup) return null;
+
+    const stream = Gio.MemoryInputStream.new_from_bytes(
+        GLib.Bytes.new(glyphTextEncoder.encode(markup)));
+    pixbuf = GdkPixbuf.Pixbuf.new_from_stream_at_scale(stream, width, height, false, null);
+    cache.set(key, pixbuf);
+    return pixbuf;
+}
+
+function drawGlyph(cr, cache, char, color, fontSize, styleOptions, x, centerY) {
+    const cellHeight = calculateCellPixelHeight(fontSize);
+    const cellWidth = calculateCellPixelWidth(fontSize, char, styleOptions.italic);
+
+    if (!isBlankGlyph(char)) {
+        const pixbuf = rasterizeGlyph(cache, char, color, cellWidth, cellHeight, styleOptions);
+        if (pixbuf) {
+            cr.save();
+            cr.translate(x, centerY - cellHeight / 2);
+            Gdk.cairo_set_source_pixbuf(cr, pixbuf, 0, 0);
+            cr.paint();
+            cr.restore();
         }
-
-        if (!isRetro && glowValue > 0) {
-            const glow = hexTo01(colors.main);
-            const steps = 4;
-            for (let i = steps; i >= 1; i--) {
-                const alpha = (glowValue / 10) * 0.2 * (i / steps);
-                cr.arc(cx, cy, dotRadius + i * 1.5, 0, 2 * Math.PI);
-                cr.setSourceRGBA(glow.r, glow.g, glow.b, alpha);
-                cr.fill();
-            }
-        }
-
-        cr.arc(cx, cy, dotRadius, 0, 2 * Math.PI);
-        cr.setSourceRGBA(main.r, main.g, main.b, 1);
-        cr.fill();
     }
+
+    return cellWidth;
+}
+
+// For multi-character text only — a single glyph key like 'alarm' must go
+// through drawGlyph() directly, or this iterates its letters one by one.
+function drawGlyphRow(cr, cache, text, color, fontSize, styleOptions, startX, centerY) {
+    let x = startX;
+    for (const char of text)
+        x += drawGlyph(cr, cache, char, color, fontSize, styleOptions, x, centerY);
+    return x - startX;
+}
+
+function drawAlarmIcon(cr, cache, slotX, centerY, slotWidth, fontSize, colors, glowValue, isRetro, styleOptions) {
+    const iconOptions = { ...styleOptions, bold: true };
+    const iconWidth = calculateCellPixelWidth(fontSize, 'alarm');
+    const iconX = slotX + (slotWidth - iconWidth) / 2;
+
+    if (isRetro && glowValue >= 1) {
+        const shadowOffset = calculateRetroShadowOffset(glowValue, fontSize);
+        drawGlyph(cr, cache, 'alarm', RETRO_SHADOW_RGBA, fontSize, iconOptions,
+            iconX + shadowOffset, centerY + shadowOffset);
+    }
+
+    drawGlyph(cr, cache, 'alarm', colors.main, fontSize, iconOptions, iconX, centerY);
 }
 
 function parseAlarms(raw) {
     let parsed;
     try {
         parsed = JSON.parse(raw);
-    } catch (e) {
+    } catch {
         parsed = [];
     }
     if (!Array.isArray(parsed)) return [];
     return parsed.filter(alarm => alarm && typeof alarm.id === 'string');
 }
 
-function fontNeedsUpdate(sourceFile, destFile) {
-    try {
-        const sourceInfo = sourceFile.query_info('standard::size,time::modified', Gio.FileQueryInfoFlags.NONE, null);
-        const destInfo = destFile.query_info('standard::size,time::modified', Gio.FileQueryInfoFlags.NONE, null);
-
-        if (sourceInfo.get_size() !== destInfo.get_size())
-            return true;
-
-        return sourceInfo.get_modification_date_time().compare(destInfo.get_modification_date_time()) > 0;
-    } catch (e) {
-        return true;
-    }
-}
-
-function installPreviewFonts(extensionPath) {
-    const filenames = ['DSEG7Classic-Regular.ttf'];
-    const fontsDirPath = GLib.build_filenamev([GLib.get_user_data_dir(), 'fonts']);
-    const fontsDir = Gio.File.new_for_path(fontsDirPath);
-
-    try {
-        if (!fontsDir.query_exists(null))
-            fontsDir.make_directory_with_parents(null);
-    } catch (e) {
-        return false;
-    }
-
-    let anyInstalled = false;
-    for (const filename of filenames) {
-        try {
-            const sourceFile = Gio.File.new_for_path(GLib.build_filenamev([extensionPath, 'assets', filename]));
-            if (!sourceFile.query_exists(null))
-                continue;
-
-            const destFile = fontsDir.get_child(filename);
-            if (!destFile.query_exists(null) || fontNeedsUpdate(sourceFile, destFile))
-                sourceFile.copy(destFile, Gio.FileCopyFlags.OVERWRITE, null, null);
-            anyInstalled = true;
-        } catch (e) {
-            continue;
-        }
-    }
-    return anyInstalled;
-}
-
 export default class RelojLCDPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const settings = this.getSettings();
-
-        const previewFontOk = installPreviewFonts(this.path);
-        const previewFontFamily = previewFontOk ? 'DSEG7 Classic' : 'Monospace';
+        const glyphPreviewCache = new Map();
 
         const generalPage = new Adw.PreferencesPage({
             title: _('General'),
@@ -217,11 +213,28 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
             active: settings.get_boolean('is-widget'),
             valign: Gtk.Align.CENTER
         });
+
+        const verticalLayoutRow = new Adw.ActionRow({
+            title: _('Vertical Panel Layout'),
+            subtitle: _('Compact layout (bell, hours, minutes stacked, no seconds or date) for a panel docked to the left or right edge of the screen. Not used in desktop widget mode.')
+        });
+        const verticalLayoutSwitch = new Gtk.Switch({
+            active: settings.get_boolean('vertical-panel-layout'),
+            sensitive: !settings.get_boolean('is-widget'),
+            valign: Gtk.Align.CENTER
+        });
+        verticalLayoutSwitch.connect('notify::active', (w) => {
+            settings.set_boolean('vertical-panel-layout', w.active);
+        });
+        verticalLayoutRow.add_suffix(verticalLayoutSwitch);
+
         widgetSwitch.connect('notify::active', (w) => {
             settings.set_boolean('is-widget', w.active);
+            verticalLayoutSwitch.set_sensitive(!w.active);
         });
         widgetRow.add_suffix(widgetSwitch);
         behaviorGroup.add(widgetRow);
+        behaviorGroup.add(verticalLayoutRow);
 
         const formatRow = new Adw.ActionRow({
             title: _('24-Hour Format'),
@@ -282,63 +295,66 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
         const previewArea = new Gtk.DrawingArea({
             content_width: 260,
             content_height: 80,
-            halign: Gtk.Align.CENTER
-        });
-        previewArea.set_draw_func((area, cr, width, height) => {
-            const colorType = settings.get_string('clock-color');
-            const colors = getPreviewColors(colorType, settings.get_string('custom-color'));
-            const previewFontSize = Math.min(settings.get_double('font-size'), PREVIEW_MAX_FONT_SIZE);
-            const hasEnabledAlarm = parseAlarms(settings.get_string('alarms')).some(alarm => alarm.enabled);
-            drawClockPreview(cr, width, height, colors, settings.get_double('glow-intensity'), colorType === 'gray', previewFontSize, hasEnabledAlarm, settings.get_boolean('show-frame'));
-        });
-
-        const previewLabel = new Gtk.Label({
-            halign: Gtk.Align.CENTER,
-            valign: Gtk.Align.CENTER
-        });
-        const previewLabelCss = new Gtk.CssProvider();
-        previewLabel.get_style_context().add_provider(previewLabelCss, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);
-
-        const previewOverlay = new Gtk.Overlay({
             halign: Gtk.Align.CENTER,
             margin_top: 6,
             margin_bottom: 6
         });
-        previewOverlay.set_child(previewArea);
-        previewOverlay.add_overlay(previewLabel);
 
-        const updatePreviewLabel = () => {
+        // Shared by both the size request and draw_func below so they never
+        // disagree on the layout numbers.
+        const computePreviewLayout = () => {
+            const fontSize = Math.min(settings.get_double('font-size'), PREVIEW_MAX_FONT_SIZE);
+            const styleOptions = resolveGlyphStyleOptions(settings.get_string('font-style'));
+            const hasEnabledAlarm = parseAlarms(settings.get_string('alarms')).some(alarm => alarm.enabled);
+            const cellHeight = calculateCellPixelHeight(fontSize);
+            const rowWidth = calculateRowPixelWidth(fontSize, PREVIEW_TEXT, styleOptions.italic);
+            const alarmSlotWidth = hasEnabledAlarm ? calculateCellPixelWidth(fontSize, '8') : 0;
+            const alarmMargin = hasEnabledAlarm ? alarmSlotWidth * PREVIEW_ALARM_SLOT_RATIO : 0;
+            return {
+                fontSize, styleOptions, hasEnabledAlarm, cellHeight, rowWidth, alarmSlotWidth, alarmMargin,
+                totalWidth: alarmSlotWidth + alarmMargin + rowWidth
+            };
+        };
+
+        previewArea.set_draw_func((area, cr, width, height) => {
             const colorType = settings.get_string('clock-color');
             const colors = getPreviewColors(colorType, settings.get_string('custom-color'));
-            const fontSize = Math.min(settings.get_double('font-size'), PREVIEW_MAX_FONT_SIZE);
-            const sizePt = Math.round(PREVIEW_BASE_FONT_PT * fontSize * 1024);
-            const fontStyle = settings.get_string('font-style');
-            let pangoWeight = 'normal';
-            let pangoStyle = 'normal';
-            if (fontStyle === 'italic') {
-                pangoStyle = 'italic';
-            } else if (fontStyle === 'bold') {
-                pangoWeight = 'bold';
-            } else if (fontStyle === 'italic-bold') {
-                pangoStyle = 'italic';
-                pangoWeight = 'bold';
-            }
-            previewLabel.set_markup(
-                `<span font_family="${previewFontFamily}" size="${sizePt}" style="${pangoStyle}" weight="${pangoWeight}" foreground="${colors.main}">88:88</span>`
-            );
-            const digitShadow = calculateDigitShadow(colorType, settings.get_double('glow-intensity'), colors.glow, fontSize);
-            previewLabelCss.load_from_string(`label { text-shadow: ${digitShadow}; }`);
+            const glowValue = settings.get_double('glow-intensity');
+            const isRetro = colorType === 'gray';
+            const showFrame = settings.get_boolean('show-frame');
+            const layout = computePreviewLayout();
 
-            const [, naturalWidth] = previewLabel.measure(Gtk.Orientation.HORIZONTAL, -1);
-            const [, naturalHeight] = previewLabel.measure(Gtk.Orientation.VERTICAL, -1);
-            previewArea.set_content_width(naturalWidth + 56);
-            previewArea.set_content_height(naturalHeight + 24);
+            drawPreviewChrome(cr, width, height, colors, glowValue, isRetro, showFrame);
+
+            const centerY = height / 2;
+            let x = (width - layout.totalWidth) / 2;
+
+            if (layout.hasEnabledAlarm) {
+                drawAlarmIcon(cr, glyphPreviewCache, x, centerY, layout.alarmSlotWidth, layout.fontSize,
+                    colors, glowValue, isRetro, layout.styleOptions);
+                x += layout.alarmSlotWidth + layout.alarmMargin;
+            }
+
+            if (isRetro && glowValue >= 1) {
+                const shadowOffset = calculateRetroShadowOffset(glowValue, layout.fontSize);
+                drawGlyphRow(cr, glyphPreviewCache, PREVIEW_TEXT, RETRO_SHADOW_RGBA, layout.fontSize,
+                    layout.styleOptions, x + shadowOffset, centerY + shadowOffset);
+            }
+
+            drawGlyphRow(cr, glyphPreviewCache, PREVIEW_TEXT, colors.main, layout.fontSize,
+                layout.styleOptions, x, centerY);
+        });
+
+        const refreshPreview = () => {
+            const layout = computePreviewLayout();
+            previewArea.set_content_width(Math.round(layout.totalWidth) + 56);
+            previewArea.set_content_height(Math.round(layout.cellHeight) + 24);
             previewArea.queue_draw();
         };
-        updatePreviewLabel();
+        refreshPreview();
 
         const previewGroup = new Adw.PreferencesGroup({ description: _('Live preview') });
-        previewGroup.add(previewOverlay);
+        previewGroup.add(previewArea);
         appearancePage.add(previewGroup);
 
         const colorGroup = new Adw.PreferencesGroup({
@@ -372,8 +388,7 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
                 .map(v => Math.round(v * 255).toString(16).padStart(2, '0'))
                 .join('');
             settings.set_string('custom-color', hex);
-            previewArea.queue_draw();
-            updatePreviewLabel();
+            refreshPreview();
         });
         customColorRow.add_suffix(colorButton);
         customColorRow.set_visible(settings.get_string('clock-color') === 'custom');
@@ -384,8 +399,7 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
             settings.set_string('clock-color', color);
             customColorRow.set_visible(color === 'custom');
             updateGlowLimit(color);
-            previewArea.queue_draw();
-            updatePreviewLabel();
+            refreshPreview();
         });
 
         const glowAdjustment = new Gtk.Adjustment({ lower: 0, upper: 10, step_increment: 1, value: settings.get_double('glow-intensity') });
@@ -413,7 +427,7 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
         glowSpin.connect('value-changed', (w) => {
             const intensity = Math.floor(w.get_value());
             settings.set_double('glow-intensity', intensity);
-            updatePreviewLabel();
+            refreshPreview();
         });
         glowRow.add_suffix(glowSpin);
         colorGroup.add(glowRow);
@@ -428,7 +442,7 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
         });
         frameSwitch.connect('notify::active', (w) => {
             settings.set_boolean('show-frame', w.active);
-            previewArea.queue_draw();
+            refreshPreview();
         });
         frameRow.add_suffix(frameSwitch);
         colorGroup.add(frameRow);
@@ -444,14 +458,14 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
             subtitle: _('Adjust the clock display size')
         });
         const fontSpin = new Gtk.SpinButton({
-            adjustment: new Gtk.Adjustment({ lower: 1.0, upper: 10.0, step_increment: 0.1, value: settings.get_double('font-size') }),
+            adjustment: new Gtk.Adjustment({ lower: 0.5, upper: 10.0, step_increment: 0.1, value: settings.get_double('font-size') }),
             digits: 1,
             valign: Gtk.Align.CENTER
         });
         fontSpin.connect('value-changed', (w) => {
             const size = Math.round(w.get_value() * 10) / 10;
             settings.set_double('font-size', size);
-            updatePreviewLabel();
+            refreshPreview();
         });
         fontRow.add_suffix(fontSpin);
         textGroup.add(fontRow);
@@ -459,14 +473,14 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
         const fontStyleKeys = ['regular', 'italic', 'bold', 'italic-bold'];
         const fontStyleRow = new Adw.ComboRow({
             title: _('Font Style'),
-            subtitle: _('Choose the font style (synthetic bold/italic by Pango)'),
+            subtitle: _('Choose the font style (synthetic bold/italic)'),
             model: new Gtk.StringList({ strings: [_('Regular'), _('Italic'), _('Bold'), _('Italic Bold')] }),
             selected: fontStyleKeys.indexOf(settings.get_string('font-style'))
         });
         fontStyleRow.connect('notify::selected', (w) => {
             const style = fontStyleKeys[w.selected];
             settings.set_string('font-style', style);
-            updatePreviewLabel();
+            refreshPreview();
         });
         textGroup.add(fontStyleRow);
 
@@ -563,7 +577,7 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
         let alarms = parseAlarms(settings.get_string('alarms'));
         const saveAlarms = () => {
             settings.set_string('alarms', JSON.stringify(alarms));
-            previewArea.queue_draw();
+            refreshPreview();
         };
 
         const hasSpecificDate = (alarm) => alarm.year !== undefined && alarm.month !== undefined && alarm.day !== undefined;
@@ -641,18 +655,26 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
             row.add_row(specificDateRow);
 
             const dateRow = new Adw.ActionRow({ title: _('Date') });
+            const initialMonth = alarm.month || today.get_month();
+            const initialYear = alarm.year || today.get_year();
+            const dayAdjustment = new Gtk.Adjustment({
+                lower: 1,
+                upper: daysInMonth(initialYear, initialMonth),
+                step_increment: 1,
+                value: alarm.day || today.get_day_of_month()
+            });
             const daySpin = new Gtk.SpinButton({
-                adjustment: new Gtk.Adjustment({ lower: 1, upper: 31, step_increment: 1, value: alarm.day || today.get_day_of_month() }),
+                adjustment: dayAdjustment,
                 valign: Gtk.Align.CENTER,
                 wrap: true
             });
             const monthSpin = new Gtk.SpinButton({
-                adjustment: new Gtk.Adjustment({ lower: 1, upper: 12, step_increment: 1, value: alarm.month || today.get_month() }),
+                adjustment: new Gtk.Adjustment({ lower: 1, upper: 12, step_increment: 1, value: initialMonth }),
                 valign: Gtk.Align.CENTER,
                 wrap: true
             });
             const yearSpin = new Gtk.SpinButton({
-                adjustment: new Gtk.Adjustment({ lower: today.get_year(), upper: today.get_year() + 20, step_increment: 1, value: alarm.year || today.get_year() }),
+                adjustment: new Gtk.Adjustment({ lower: today.get_year(), upper: today.get_year() + 20, step_increment: 1, value: initialYear }),
                 valign: Gtk.Align.CENTER
             });
             dateRow.add_suffix(daySpin);
@@ -681,9 +703,20 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
                 dateRow.set_visible(w.active);
                 applyDate();
             });
+
+            const clampDayToMonth = () => {
+                const maxDay = daysInMonth(Math.floor(yearSpin.get_value()), Math.floor(monthSpin.get_value()));
+                dayAdjustment.set_upper(maxDay);
+                if (daySpin.get_value() > maxDay) {
+                    daySpin.set_value(maxDay);
+                } else {
+                    applyDate();
+                }
+            };
+
             daySpin.connect('value-changed', applyDate);
-            monthSpin.connect('value-changed', applyDate);
-            yearSpin.connect('value-changed', applyDate);
+            monthSpin.connect('value-changed', clampDayToMonth);
+            yearSpin.connect('value-changed', clampDayToMonth);
 
             const labelRow = new Adw.EntryRow({
                 title: _('Label'),
@@ -886,7 +919,7 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
             const keysToReset = [
                 'font-size', 'clock-color', 'custom-color', 'glow-intensity',
                 'clock-format-24h', 'show-seconds', 'show-date', 'panel-position',
-                'is-widget', 'flicker-enabled', 'font-style', 'ghost-segments',
+                'is-widget', 'vertical-panel-layout', 'flicker-enabled', 'font-style', 'ghost-segments',
                 'startup-lamp-test', 'minute-flicker', 'crt-scanlines', 'show-frame',
                 'blink-dots', 'snooze-minutes', 'alarm-dialog-enabled'
             ];
@@ -894,6 +927,7 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
                 settings.reset(key);
 
             widgetSwitch.set_active(settings.get_boolean('is-widget'));
+            verticalLayoutSwitch.set_active(settings.get_boolean('vertical-panel-layout'));
             formatSwitch.set_active(settings.get_boolean('clock-format-24h'));
             secondsSwitch.set_active(settings.get_boolean('show-seconds'));
             dateSwitch.set_active(settings.get_boolean('show-date'));
@@ -919,8 +953,7 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
             snoozeSpin.set_value(settings.get_int('snooze-minutes'));
             alarmDialogSwitch.set_active(settings.get_boolean('alarm-dialog-enabled'));
 
-            previewArea.queue_draw();
-            updatePreviewLabel();
+            refreshPreview();
         };
 
         resetButton.connect('clicked', () => {
@@ -942,6 +975,53 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
         });
         resetRow.add_suffix(resetButton);
         resetGroup.add(resetRow);
+
+        // Settings changed elsewhere (e.g. the panel's quick color menu, a
+        // separate process) propagate here via dconf, so this window needs
+        // to listen instead of only reacting to its own widgets.
+        //
+        // `connectObject()` is a convenience the Shell process monkey-patches
+        // onto GObject.Object; it does not exist in this separate Preferences
+        // process, so plain `connect()` + manual disconnect on window close
+        // is used instead.
+        const externalSyncHandlerIds = [
+            settings.connect('changed::clock-color', () => {
+                const color = settings.get_string('clock-color');
+                colorRow.set_selected(colorKeys.indexOf(color));
+                customColorRow.set_visible(color === 'custom');
+                updateGlowLimit(color);
+                refreshPreview();
+            }),
+            settings.connect('changed::custom-color', () => {
+                const rgba = new Gdk.RGBA();
+                rgba.parse(isValidHex(settings.get_string('custom-color')) ? settings.get_string('custom-color') : '#00ff00');
+                colorButton.set_rgba(rgba);
+                refreshPreview();
+            }),
+            settings.connect('changed::glow-intensity', () => {
+                glowSpin.set_value(settings.get_double('glow-intensity'));
+                refreshPreview();
+            }),
+            settings.connect('changed::show-frame', () => {
+                frameSwitch.set_active(settings.get_boolean('show-frame'));
+                refreshPreview();
+            }),
+            settings.connect('changed::font-size', () => {
+                fontSpin.set_value(settings.get_double('font-size'));
+                refreshPreview();
+            }),
+            settings.connect('changed::font-style', () => {
+                fontStyleRow.set_selected(fontStyleKeys.indexOf(settings.get_string('font-style')));
+                refreshPreview();
+            }),
+            settings.connect('changed::alarms', () => refreshPreview())
+        ];
+
+        window.connect('close-request', () => {
+            for (const id of externalSyncHandlerIds)
+                settings.disconnect(id);
+            return false;
+        });
 
         window.add(generalPage);
         window.add(appearancePage);

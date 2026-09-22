@@ -1,12 +1,12 @@
 # Retro LCD 7-Segment Clock & Widget
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Release](https://img.shields.io/badge/release-v73-blue)](https://gitlab.com/corral1976/gnome-shell-extension-relojlcd/-/releases)
-[![CI Status](https://img.shields.io/badge/CI-passing-brightgreen)](https://gitlab.com/corral1976/gnome-shell-extension-relojlcd/-/pipelines)
+[![GitLab release](https://img.shields.io/gitlab/v/release/corral1976%2Fgnome-shell-extension-relojlcd)](https://gitlab.com/corral1976/gnome-shell-extension-relojlcd/-/releases)
+[![pipeline status](https://gitlab.com/corral1976/gnome-shell-extension-relojlcd/badges/main/pipeline.svg)](https://gitlab.com/corral1976/gnome-shell-extension-relojlcd/-/commits/main)
 
 GNOME Shell extension that shows a retro digital LCD-style clock in the top panel, or as a floating widget on the desktop.
 
-Minimalist, lightweight design, true to the classic 7-segment LCD look from the 80s/90s.
+Minimalist, lightweight design, true to the classic 7-segment LCD look from the 80s/90s. No fonts to install, no bundled audio files — everything the clock needs is drawn or played from what's already on your system.
 
 ---
 
@@ -26,7 +26,7 @@ Repository mirrors: [GitLab](https://gitlab.com/corral1976/gnome-shell-extension
 - 4 font styles: Regular, Bold, Italic and Bold Italic, applied live from the preferences window
 - 10 color themes: neon green, amber, retro gray, ruby, sapphire, white, violet, gold, VFD teal and Nixie orange
 - Custom color picker for digits, separators, alarm dot and border, with a live preview in the preferences window
-- Multiple alarms with sound, custom labels and snooze support
+- Multiple alarms with sound, custom labels and snooze support — the alarm sound plays through GNOME Shell's own sound theme, no extra audio file needed
 - On-screen alarm dialog, so a ringing alarm isn't missed if notifications are silenced (e.g. Do Not Disturb)
 - Built-in preferences panel (GTK4/Adwaita), organized into General, Appearance, Alarms and About tabs
 - Looks good in both light and dark shell themes
@@ -38,6 +38,7 @@ Repository mirrors: [GitLab](https://gitlab.com/corral1976/gnome-shell-extension
 - CRT scanlines overlay, for a retro tube/VFD look
 - Toggleable display border: hide just the outline, keeping the background and glow
 - Quick color menu: click the panel indicator for instant theme switching without opening full Preferences
+- Update notice: a one-time notification (with the extension's icon) lets you know when it has updated to a new version
 
 ---
 
@@ -98,35 +99,23 @@ If nothing shows up after all this, try restarting your whole computer once befo
 
 ---
 
-## The clock shows plain numbers instead of the LCD font
+## The clock shows blank or broken digits
 
-This is the most common issue, and it always comes down to the same thing: the bundled font
-(`DSEG7Classic-Regular.ttf`) didn't end up where the extension expects it, or GNOME Shell hadn't
-restarted since it got there. Go through these in order:
+The digits are drawn from small vector shapes embedded directly in `glyphAssets.js` — not from
+a system font and not from separate asset files — so this is rare. If it happens, it's almost
+certainly a JavaScript error rather than a missing file; check the extension's logs
+(`journalctl -f -o cat /usr/bin/gnome-shell` while it happens, or the Looking Glass extension
+inspector) for anything mentioning `relojlcd`.
 
-**1. Check the font file actually made it to the right place.** Open a terminal and run:
+**1. Restart GNOME Shell (or log out and back in).** On X11: `Alt+F2`, type `r`, Enter. On
+Wayland: log out and log back in (the X11 shortcut won't do anything, so that's the sign
+you're on Wayland).
 
-```bash
-ls ~/.local/share/gnome-shell/extensions/relojlcd@carlos/assets/
-```
+**2. Turn the extension off and back on** in the Extensions app (`gnome-extensions-app`)
+after restarting.
 
-You should see `DSEG7Classic-Regular.ttf` and `alarm.ogg` listed. If that folder or file is
-missing, the copy step during installation didn't go through completely — repeat step 2 of the
-manual installation above, making sure the `cp -r * "$DEST/"` command actually finishes without
-errors (and that you were inside the extracted extension folder, with the `assets` folder visible,
-when you ran it).
-
-**2. Restart GNOME Shell (or log out and back in) *after* the font file is in place.** The
-extension loads the font when it starts, not while you're copying files — if you install the font
-and then reload the extension in the same step without a proper Shell restart, it may have already
-loaded before the file was fully in place. On X11: `Alt+F2`, type `r`, Enter. On Wayland: log out
-and log back in (the X11 shortcut won't do anything, so that's the sign you're on Wayland).
-
-**3. Turn the extension off and back on** in the Extensions app (`gnome-extensions-app`) after
-restarting — this forces it to reload the font from scratch.
-
-If you did all three and it still shows plain numbers, please open an issue with your GNOME Shell
-version (`gnome-shell --version`) and whether you're on X11 or Wayland (`echo $XDG_SESSION_TYPE`).
+If you did both and it still looks wrong, please open an issue with your GNOME Shell version
+(`gnome-shell --version`) and whether you're on X11 or Wayland (`echo $XDG_SESSION_TYPE`).
 
 ---
 
@@ -146,18 +135,28 @@ relojlcd@carlos/
 ├── extension.js
 ├── colorUtils.js
 ├── renderMath.js
+├── glyphAssets.js
+├── glyphTexture.js
+├── sevenSegmentRow.js
 ├── metadata.json
 ├── prefs.js
 ├── stylesheet.css
 ├── DSEG-LICENSE.txt
 ├── LICENSE
-├── assets/
-│   ├── DSEG7Classic-Regular.ttf
-│   └── alarm.ogg
+├── README.md
 └── schemas/
     ├── org.gnome.shell.extensions.relojlcd.gschema.xml
     └── gschemas.compiled  (auto-generated, don't commit it)
 ```
+
+The digit glyphs don't ship as separate files — they're embedded as SVG path data directly
+in `glyphAssets.js` and drawn at runtime, so there's nothing under `assets/` to install for
+them. The original per-glyph `.svg` reference files used while designing them live in this
+repository (see the source tree on GitLab/GitHub) but aren't part of the packaged
+extension. The alarm sound isn't bundled either — it plays through GNOME Shell's own sound
+theme, so there's no audio file to ship or keep in sync. The one-time notification shown
+after an update uses a stock symbolic icon from the system theme, so there's no image file
+to ship for it either.
 
 ---
 
@@ -172,13 +171,20 @@ If you like the extension and want to help keep it maintained:
 ## License
 
 - The extension code is licensed under the **MIT License** (see `LICENSE`).
-- The bundled font, **DSEG7 Classic** by Keshikan, is licensed under the **SIL Open Font License 1.1** (see `DSEG-LICENSE.txt`). It can be used, embedded, and redistributed for both personal and commercial purposes.
+- The digit glyphs are embedded as SVG path data inside `glyphAssets.js`, derived from the
+  shapes of the **DSEG7 Classic** font by Keshikan. No `.ttf` file is bundled or installed
+  on your system — the extension draws the digits directly from this embedded data.
+  Because the glyph shapes are still a derivative of DSEG7, the font's **SIL Open Font
+  License 1.1** (see `DSEG-LICENSE.txt`) applies to them and is bundled alongside the
+  code, as the OFL requires for derivative works.
+- The alarm sound is played from GNOME Shell's own system sound theme, not from a file
+  bundled with the extension, so no separate audio license applies.
 
 ---
 
 ## Credits
 
-- **DSEG7 Classic font**: created by **Keshikan** ([keshikan.net](https://www.keshikan.net/fonts-e.html))
+- **DSEG7 Classic font**: original design by **Keshikan** ([keshikan.net](https://www.keshikan.net/fonts-e.html)), whose glyph shapes were adapted into this extension's embedded SVG data
 - **Font license**: [SIL Open Font License 1.1](http://scripts.sil.org/OFL)
 
 Made by **Carlos Corral**

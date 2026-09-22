@@ -114,6 +114,11 @@
       <summary>Desktop widget mode</summary>
       <description>Show clock on desktop instead of the top bar</description>
     </key>
+    <key name="vertical-panel-layout" type="b">
+      <default>false</default>
+      <summary>Vertical panel layout</summary>
+      <description>Show a compact layout (alarm bell, hours and minutes stacked, no seconds or date) instead of the normal horizontal display. Meant for a panel docked to the left or right edge of the screen, e.g. via Dash to Panel. Has no effect in desktop widget mode.</description>
+    </key>
     <key name="widget-x" type="i">
       <default>100</default>
       <summary>Widget X position</summary>
@@ -138,7 +143,7 @@
       </choices>
       <default>'regular'</default>
       <summary>Font style</summary>
-      <description>Choose the font style (synthetic bold/italic by Pango)</description>
+      <description>Choose the font style (synthetic bold/italic)</description>
     </key>
     <key name="ghost-segments" type="b">
       <default>false</default>
@@ -169,6 +174,11 @@
       <default>true</default>
       <summary>Display border</summary>
       <description>Show the border outline around the display. Disable to hide just the border line; the background and glow stay visible either way.</description>
+    </key>
+    <key name="last-version" type="s">
+      <default>''</default>
+      <summary>Last notified version</summary>
+      <description>Internal: the metadata version the update notification was last shown for, so it is only shown once per release</description>
     </key>
   </schema>
 </schemalist>
