@@ -1,0 +1,77 @@
+name: CI & Build Release for GNOME Extension
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+      - master
+
+jobs:
+  build:
+    name: Validate and Build Extension
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq gettext
+
+      - name: Validate metadata.json
+        run: |
+          if [ -f "metadata.json" ]; then
+            jq . metadata.json > /dev/null
+            echo "metadata.json es un JSON válido."
+          else
+            echo "Error: metadata.json no se encuentra en la raíz del repositorio."
+            exit 1
+          fi
+
+      - name: Get Extension UUID
+        id: get_uuid
+        run: |
+          UUID=$(jq -r '.uuid' metadata.json)
+          echo "uuid=$UUID" >> $GITHUB_OUTPUT
+
+      - name: Create Extension Package (.zip)
+        run: |
+          # Crea un paquete ZIP excluyendo archivos innecesarios de Git
+          zip -r "${{ steps.get_uuid.outputs.uuid }}.zip" . -x "*.git*" ".github/*" "README.md" "LICENSE"
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-package
+          path: "${{ steps.get_uuid.outputs.uuid }}.zip"
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: extension-package
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: "*.zip"
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
