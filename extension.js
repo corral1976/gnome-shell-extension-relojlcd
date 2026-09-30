@@ -21,6 +21,7 @@ import {
     resolveGlyphStyleOptions,
     calculateCellPixelHeight,
     calculateCellPixelWidth,
+    calculateRowPixelWidth,
     getGlyphAspectRatio
 } from './glyphAssets.js';
 
@@ -35,6 +36,10 @@ const THEME_MAP = {
     )
 };
 
+const COMPACT_HORIZONTAL_PADDING = 3;
+const COMPACT_MIN_FONT_SIZE = 0.4;
+const LABEL_HORIZONTAL_MARGIN = 8;
+const CONTAINER_BORDER_WIDTH = 2;
 const GHOST_SEGMENTS_OPACITY = 30;
 const ALARM_ICON_MIN_RASTER_SIZE = 48;
 const LAMP_TEST_PEAK_OPACITY = 220;
@@ -197,6 +202,8 @@ export default class RelojLCDExtension extends Extension {
         this._testSoundCancellable = null;
         this._blinkTimeoutId = null;
         this._initTimeoutId = null;
+        this._panelFitIdleId = null;
+        this._effectiveFontSize = 0;
         this._flickerTimeoutId = null;
         this._styleUpdateDebounceId = null;
         this._isChromeIndicator = false;
@@ -221,6 +228,8 @@ export default class RelojLCDExtension extends Extension {
         this._scanlinesLastHeight = 0;
         this._displayWrapper = null;
         this._glyphTextureCache = null;
+        this._horizontalCenteringOffset = 0;
+        this._retroShadowOffset = 0;
 
         this._migrateLegacyAlarm();
         this._alarms = this._parseAlarms();
@@ -296,6 +305,7 @@ export default class RelojLCDExtension extends Extension {
             this._initTimeoutId = null;
         }
 
+        this._removePanelFitIdle();
         this._disconnectIndicatorSignals();
 
         this._clockLabel?.destroy();
@@ -422,15 +432,10 @@ export default class RelojLCDExtension extends Extension {
     }
 
     _resetView() {
-        // Order matters here: destroying _indicator cascades synchronously
-        // to every descendant actor and can itself trigger a synchronous
-        // St.ThemeContext 'changed' (theme node invalidation from the
-        // actor-tree change). So the theme-context listener has to be
-        // disconnected, and the label/actor references nulled out, BEFORE
-        // that destroy() call — otherwise a reentrant _updateStyle() call
-        // from that same 'changed' signal still sees non-null references
-        // pointing at objects the destroy cascade just disposed.
+        // destroy() can fire a theme 'changed' synchronously; unhook and
+        // null everything first or _updateStyle() hits disposed actors.
         this._teardownInProgress = true;
+        this._removePanelFitIdle();
         this._disconnectIndicatorSignals();
 
         if (this._themeContextId) {
@@ -450,6 +455,8 @@ export default class RelojLCDExtension extends Extension {
         this._alarmDot = null;
         this._alarmDotShadow = null;
         this._alarmDotWrapper = null;
+        this._horizontalCenteringOffset = 0;
+        this._retroShadowOffset = 0;
 
         if (this._indicator) {
             if (this._isChromeIndicator) Main.layoutManager.removeChrome(this._indicator);
@@ -545,6 +552,76 @@ export default class RelojLCDExtension extends Extension {
     _updateScanlines() {
         if (!this._scanlinesActor) return;
         this._scanlinesActor.visible = this._settings.get_boolean('crt-scanlines');
+    }
+
+    _removePanelFitIdle() {
+        if (this._panelFitIdleId) {
+            GLib.Source.remove(this._panelFitIdleId);
+            this._panelFitIdleId = null;
+        }
+    }
+
+    _isCompactLayout() {
+        return !this._settings.get_boolean('is-widget') && this._settings.get_boolean('vertical-panel-layout');
+    }
+
+    _getEffectiveFontSize() {
+        const fontSize = this._settings.get_double('font-size');
+        const parentWidth = this._isCompactLayout() ? (this._indicator?.get_parent()?.get_width() ?? 0) : 0;
+        if (parentWidth <= 0) return fontSize;
+
+        const italic = resolveGlyphStyleOptions(this._settings.get_string('font-style')).italic;
+        const glow = this._settings.get_double('glow-intensity');
+        const shadowOffset = this._settings.get_string('clock-color') === 'gray' && glow >= 1
+            ? calculateRetroShadowOffset(glow, fontSize)
+            : 0;
+        const availableWidth = parentWidth - this._indicator.get_theme_node().get_horizontal_padding() -
+            2 * COMPACT_HORIZONTAL_PADDING - CONTAINER_BORDER_WIDTH - LABEL_HORIZONTAL_MARGIN - shadowOffset;
+        const naturalWidth = calculateRowPixelWidth(fontSize, '88', italic);
+        if (availableWidth >= naturalWidth) return fontSize;
+
+        const fitted = Math.floor(fontSize * Math.max(0, availableWidth) / naturalWidth * 20) / 20;
+        return Math.min(fontSize, Math.max(COMPACT_MIN_FONT_SIZE, fitted));
+    }
+
+    _schedulePanelFit() {
+        if (this._panelFitIdleId) return;
+        this._panelFitIdleId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            this._panelFitIdleId = null;
+            if (this._teardownInProgress || !this._settings || !this._clockLabel) return GLib.SOURCE_REMOVE;
+            if (this._getEffectiveFontSize() === this._effectiveFontSize) return GLib.SOURCE_REMOVE;
+            this._invalidateStyleCache();
+            this._updateStyle();
+            this._updateClock();
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    // Cells don't shrink in a narrow panel and overflow to the right; shift
+    // left by half the overflow and clip so both sides are cropped evenly.
+    _updateHorizontalCentering() {
+        if (!this._clockContainer || !this._clockLabel || !this._ghostLabel || !this._shadowLabel) return;
+
+        const [availableWidth] = this._clockContainer.get_size();
+        if (availableWidth <= 0) return;
+
+        const [, naturalWidth] = this._clockLabel.get_preferred_width(-1);
+        const overflow = Math.max(0, naturalWidth - availableWidth);
+        this._horizontalCenteringOffset = -overflow / 2;
+        // Clip only while squeezed; an always-on clip cuts the retro shadow.
+        this._clockContainer.clip_to_allocation = overflow > 0.5;
+
+        this._clockLabel.set_translation(this._horizontalCenteringOffset, 0, 0);
+        this._ghostLabel.set_translation(this._horizontalCenteringOffset, 0, 0);
+        this._applyShadowLabelTranslation();
+    }
+
+    _applyShadowLabelTranslation() {
+        if (!this._shadowLabel) return;
+        this._shadowLabel.set_translation(
+            this._horizontalCenteringOffset + this._retroShadowOffset,
+            this._retroShadowOffset,
+            0);
     }
 
     _rebuildScanlines(height) {
@@ -708,15 +785,7 @@ export default class RelojLCDExtension extends Extension {
     }
 
     _buildIndicator() {
-        // The newly created actor tree below is parented into the live stage
-        // (addToStatusArea/addChrome) but hasn't gone through its first
-        // allocate() pass yet — that only happens on the next frame. The
-        // _updateStyle() call further down would otherwise queue_redraw()
-        // actors with no allocation yet, which Mutter logs as a harmless but
-        // noisy "needs an allocation" warning. _skipInitialRedraw silences
-        // just that first, premature round of redraw requests; the actor's
-        // first real paint after allocation already reflects the style set
-        // here, so nothing is lost by skipping it.
+        // No allocation yet on first build; redrawing now makes Mutter warn.
         this._skipInitialRedraw = true;
         const isWidget = this._settings.get_boolean('is-widget');
         const compact = !isWidget && this._settings.get_boolean('vertical-panel-layout');
@@ -734,7 +803,7 @@ export default class RelojLCDExtension extends Extension {
         this._clockLabel.setText(
             this._getPlaceholderText(showSeconds, showDate, isWidget, compact),
             this._getTheme(this._settings.get_string('clock-color')).main,
-            this._settings.get_double('font-size'),
+            this._getEffectiveFontSize(),
             glyphOptions);
 
         this._shadowLabel = new SevenSegmentRow(this._glyphTextureCache, {
@@ -747,7 +816,7 @@ export default class RelojLCDExtension extends Extension {
         this._shadowLabel.setText(
             this._getPlaceholderText(showSeconds, showDate, isWidget, compact),
             RETRO_SHADOW_RGBA,
-            this._settings.get_double('font-size'),
+            this._getEffectiveFontSize(),
             glyphOptions);
 
         this._ghostLabel = new SevenSegmentRow(this._glyphTextureCache, {
@@ -761,7 +830,7 @@ export default class RelojLCDExtension extends Extension {
         this._ghostLabel.setText(
             this._getPlaceholderText(showSeconds, showDate, isWidget, compact),
             this._getTheme(this._settings.get_string('clock-color')).main,
-            this._settings.get_double('font-size'),
+            this._getEffectiveFontSize(),
             glyphOptions);
 
         this._scanlinesActor = new St.Widget({
@@ -785,12 +854,12 @@ export default class RelojLCDExtension extends Extension {
         this._clockContainer = new St.Widget({
             layout_manager: new Clutter.BinLayout(),
             offscreen_redirect: Clutter.OffscreenRedirect.ALWAYS,
-            // Explicit CENTER (rather than the default FILL) matters once
-            // this is the cross axis of a vertical _container: FILL forces
-            // it to the panel's narrow allocated width and left-anchors
-            // whatever doesn't fit, instead of centering the overflow.
+            // CENTER on purpose: with FILL the clock is squashed to the narrow
+            // vertical panel width and the overflow sticks to the left.
             x_align: Clutter.ActorAlign.CENTER
         });
+
+        this._connect(this._clockContainer, 'notify::allocation', () => this._updateHorizontalCentering());
 
         this._clockContainer.add_child(this._ghostLabel);
         this._clockContainer.add_child(this._shadowLabel);
@@ -880,6 +949,7 @@ export default class RelojLCDExtension extends Extension {
             this._indicator.add_child(this._displayWrapper);
 
             Main.panel.addToStatusArea(this.uuid, this._indicator, 1, pos);
+            this._connect(this._indicator.get_parent(), 'notify::allocation', () => this._schedulePanelFit());
         }
 
         this._indicator.accessible_role = Atk.Role.PUSH_BUTTON;
@@ -923,7 +993,7 @@ export default class RelojLCDExtension extends Extension {
             const blink = this._settings.get_boolean('blink-dots');
             const colorType = this._settings.get_string('clock-color');
             const glow = this._settings.get_double('glow-intensity');
-            const fontSize = this._settings.get_double('font-size');
+            const fontSize = this._getEffectiveFontSize();
             const glyphOptions = resolveGlyphStyleOptions(this._settings.get_string('font-style'));
 
             const timeStr = this._formatTime(now, is24h, showSeconds, showDate, isWidget, blink, compact);
@@ -944,16 +1014,14 @@ export default class RelojLCDExtension extends Extension {
                 this._indicator.accessible_name = this._formatAccessibleTime(now, is24h);
             }
 
+            this._updateHorizontalCentering();
             this._checkAlarm(now);
             return GLib.SOURCE_CONTINUE;
         };
 
         update();
 
-        const blinkEnabled = this._settings.get_boolean('blink-dots');
-        const isWidgetMode = this._settings.get_boolean('is-widget');
-        const showSeconds = (!isWidgetMode && this._settings.get_boolean('vertical-panel-layout')) ? false : this._settings.get_boolean('show-seconds');
-        const interval = blinkEnabled ? 500 : (showSeconds ? 1000 : 10000);
+        const interval = this._settings.get_boolean('blink-dots') ? 500 : 1000;
 
         this._clockTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, interval, update);
     }
@@ -961,9 +1029,7 @@ export default class RelojLCDExtension extends Extension {
     _formatTime(now, is24h, showSeconds, showDate, isWidget, blink, compact = false) {
         this._dotState = blink ? !this._dotState : true;
 
-        // Vertical layout stacks hours over minutes instead of a single
-        // "HH : MM" line, so there's no separator to blink and nothing
-        // else (seconds, date) fits alongside it.
+        // Compact layout: no separator, seconds or date, just HH over MM.
         if (compact) {
             const format = is24h ? '%H\n%M' : '%I\n%M';
             return now.format(format);
@@ -1214,12 +1280,10 @@ export default class RelojLCDExtension extends Extension {
 
         this._updateGhostLabel(config, theme);
         this._applyStyles(containerStyle, clockStyle, theme, config);
+        this._updateHorizontalCentering();
     }
 
-    // Vertical layout stacks the alarm bell above the (now two-line) time
-    // instead of beside it, so the bell+clock box itself has to flip from a
-    // horizontal to a vertical BoxLayout, and the bell needs to be centered
-    // above the stack instead of aligned to the start of the row.
+    // Vertical layout: bell sits above the clock instead of beside it.
     _applyContainerOrientation(config) {
         if (this._container) {
             this._container.orientation = config.compact ? Clutter.Orientation.VERTICAL : Clutter.Orientation.HORIZONTAL;
@@ -1232,13 +1296,6 @@ export default class RelojLCDExtension extends Extension {
     _updateGhostLabel(config, theme) {
         if (!this._ghostLabel) return;
 
-        // On the very first _buildIndicator() pass the constructor already
-        // set this exact text/color/size a few lines earlier, before the
-        // actor was parented to the stage — re-setting it here would touch
-        // every cell's content on an actor that's now parented but not yet
-        // allocated, which is what actually produces the "needs an
-        // allocation" warnings (not the queue_redraw() calls in
-        // _applyStyles()). Skipping the redundant call avoids that for free.
         if (!this._skipInitialRedraw) {
             this._ghostLabel.setText(
                 this._getPlaceholderText(config.showSeconds, config.showDate, config.isWidget, config.compact),
@@ -1254,7 +1311,8 @@ export default class RelojLCDExtension extends Extension {
         const compact = !isWidget && this._settings.get_boolean('vertical-panel-layout');
         const showSeconds = compact ? false : this._settings.get_boolean('show-seconds');
         const showDate = compact ? false : this._settings.get_boolean('show-date');
-        const fontSize = this._settings.get_double('font-size');
+        const fontSize = this._getEffectiveFontSize();
+        this._effectiveFontSize = fontSize;
         const colorType = this._settings.get_string('clock-color');
         const glow = this._settings.get_double('glow-intensity');
         return {
@@ -1267,7 +1325,7 @@ export default class RelojLCDExtension extends Extension {
             compact: compact,
             fontStyle: this._settings.get_string('font-style'),
             showFrame: this._settings.get_boolean('show-frame'),
-            horizontalPadding: this._calculateHorizontalPadding(fontSize, showSeconds, glow, colorType)
+            horizontalPadding: compact ? COMPACT_HORIZONTAL_PADDING : this._calculateHorizontalPadding(fontSize, showSeconds, glow, colorType)
         };
     }
 
@@ -1297,9 +1355,8 @@ export default class RelojLCDExtension extends Extension {
 
         const isRetro = config.colorType === 'gray';
         if (isRetro && config.glow >= 1) {
-            const shadowOffset = calculateRetroShadowOffset(config.glow, config.fontSize);
-            this._shadowLabel.set_translation(shadowOffset, shadowOffset, 0);
-            // Same redundant-on-first-build reasoning as _updateGhostLabel().
+            this._retroShadowOffset = calculateRetroShadowOffset(config.glow, config.fontSize);
+            this._applyShadowLabelTranslation();
             if (!this._skipInitialRedraw) {
                 this._shadowLabel.setText(
                     this._getPlaceholderText(config.showSeconds, config.showDate, config.isWidget, config.compact),
@@ -1309,6 +1366,7 @@ export default class RelojLCDExtension extends Extension {
             }
             this._shadowLabel.show();
         } else {
+            this._retroShadowOffset = 0;
             this._shadowLabel.hide();
         }
     }
@@ -1411,7 +1469,7 @@ export default class RelojLCDExtension extends Extension {
         const shadowOffset = showGhostShadow ? calculateRetroShadowOffset(config.glow, config.fontSize) : 0;
 
         const glyphOptions = resolveGlyphStyleOptions(config.fontStyle);
-        // Always bold: the bell's fine detail doesn't survive at small sizes otherwise.
+        // Bold keeps the bell legible at small sizes.
         const iconOptions = { ...glyphOptions, bold: true };
 
         const iconAspect = getGlyphAspectRatio('alarm', glyphOptions.italic);

@@ -1,5 +1,5 @@
 const BASE_FONT_SIZE = 1.8;
-const RETRO_OFFSET_PER_GLOW_UNIT = 1.2;
+const RETRO_OFFSET_PER_GLOW_UNIT = 0.48;
 
 export const RETRO_SHADOW_RGBA = 'rgba(80, 80, 80, 0.6)';
 

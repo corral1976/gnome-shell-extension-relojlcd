@@ -30,6 +30,8 @@ const BOLD_STROKE_WIDTH_RATIO = 0.055;
 const SEGMENT_SHAPE_GLYPHS = new Set(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'M', 'P', '-']);
 const BOLD_SEGMENT_OFFSET = 30;
 const BOLD_SEGMENT_EDGE_BAND = 0.25;
+const BOLD_SEGMENT_TIP_FREE_DISTANCE = 70;
+const BOLD_SEGMENT_FULL_GROWTH_DISTANCE = 100;
 const BOLD_SEGMENT_TOP_ROLE_MAX_Y = 250;
 const BOLD_SEGMENT_BOTTOM_ROLE_MIN_Y = 750;
 
@@ -98,12 +100,8 @@ function parseLinearSubpaths(d) {
     return subpaths;
 }
 
-// A 7-segment bar thickens toward the LED it belongs to, never toward the
-// case/neighbouring-digit edge, and never at the pointed tips where two bars
-// meet — that's what keeps the dark separation gap between segments intact.
-// A horizontal bar's role (top/middle/bottom) comes from where it sits in the
-// glyph's own 0-1000 viewBox; a vertical bar's side comes from its position
-// relative to the glyph's horizontal center.
+// Bold grows each bar toward its own LED only, and only along its middle:
+// growth tapers to zero near the tips so the dark gap between segments survives.
 function thickenSegmentSubpath(vertices, glyphCenterX) {
     let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
     for (const [vx, vy] of vertices) {
@@ -112,30 +110,63 @@ function thickenSegmentSubpath(vertices, glyphCenterX) {
         if (vy < yMin) yMin = vy;
         if (vy > yMax) yMax = vy;
     }
-    const width = xMax - xMin;
-    const height = yMax - yMin;
+    const horizontal = xMax - xMin >= yMax - yMin;
+    const along = horizontal ? 0 : 1;
+    const across = 1 - along;
+    const alongMin = horizontal ? xMin : yMin;
+    const alongMax = horizontal ? xMax : yMax;
+    const acrossMin = horizontal ? yMin : xMin;
+    const acrossMax = horizontal ? yMax : xMax;
+    const bandSize = (acrossMax - acrossMin) * BOLD_SEGMENT_EDGE_BAND;
 
-    if (width >= height) {
+    const lowEdge = { sign: -1, contains: value => value <= acrossMin + bandSize };
+    const highEdge = { sign: 1, contains: value => value >= acrossMax - bandSize };
+    let growingEdges;
+    if (horizontal) {
         const centerY = (yMin + yMax) / 2;
-        let growTop = false, growBottom = false;
-        if (centerY <= BOLD_SEGMENT_TOP_ROLE_MAX_Y) growBottom = true;
-        else if (centerY >= BOLD_SEGMENT_BOTTOM_ROLE_MIN_Y) growTop = true;
-        else { growTop = true; growBottom = true; }
-
-        return vertices.map(([vx, vy]) => {
-            const t = height > 0 ? (vy - yMin) / height : 0;
-            if (growTop && t <= BOLD_SEGMENT_EDGE_BAND) return [vx, vy - BOLD_SEGMENT_OFFSET];
-            if (growBottom && t >= 1 - BOLD_SEGMENT_EDGE_BAND) return [vx, vy + BOLD_SEGMENT_OFFSET];
-            return [vx, vy];
-        });
+        if (centerY <= BOLD_SEGMENT_TOP_ROLE_MAX_Y) growingEdges = [highEdge];
+        else if (centerY >= BOLD_SEGMENT_BOTTOM_ROLE_MIN_Y) growingEdges = [lowEdge];
+        else growingEdges = [lowEdge, highEdge];
+    } else {
+        growingEdges = [(xMin + xMax) / 2 < glyphCenterX ? highEdge : lowEdge];
     }
 
-    const leftSide = (xMin + xMax) / 2 < glyphCenterX;
-    return vertices.map(([vx, vy]) => {
-        const t = width > 0 ? (vx - xMin) / width : 0;
-        if (leftSide && t >= 1 - BOLD_SEGMENT_EDGE_BAND) return [vx + BOLD_SEGMENT_OFFSET, vy];
-        if (!leftSide && t <= BOLD_SEGMENT_EDGE_BAND) return [vx - BOLD_SEGMENT_OFFSET, vy];
-        return [vx, vy];
+    const edgeOf = vertex => growingEdges.find(edge => edge.contains(vertex[across]));
+
+    const fullGrowthOffsets = [alongMin + BOLD_SEGMENT_FULL_GROWTH_DISTANCE, alongMax - BOLD_SEGMENT_FULL_GROWTH_DISTANCE];
+    const withTaperPoints = [];
+    for (let i = 0; i < vertices.length; i++) {
+        const start = vertices[i];
+        const end = vertices[(i + 1) % vertices.length];
+        withTaperPoints.push(start);
+
+        const edge = edgeOf(start);
+        if (!edge || edge !== edgeOf(end) || start[along] === end[along]) continue;
+
+        const direction = Math.sign(end[along] - start[along]);
+        const crossings = fullGrowthOffsets
+            .filter(position => (position - start[along]) * direction > 0 && (end[along] - position) * direction > 0)
+            .sort((first, second) => (first - second) * direction);
+        for (const position of crossings) {
+            const ratio = (position - start[along]) / (end[along] - start[along]);
+            const point = [0, 0];
+            point[along] = position;
+            point[across] = start[across] + (end[across] - start[across]) * ratio;
+            withTaperPoints.push(point);
+        }
+    }
+
+    return withTaperPoints.map(vertex => {
+        const edge = edgeOf(vertex);
+        if (!edge) return vertex;
+
+        const distanceFromTip = Math.min(vertex[along] - alongMin, alongMax - vertex[along]);
+        const growth = Math.min(1, Math.max(0,
+            (distanceFromTip - BOLD_SEGMENT_TIP_FREE_DISTANCE) /
+            (BOLD_SEGMENT_FULL_GROWTH_DISTANCE - BOLD_SEGMENT_TIP_FREE_DISTANCE)));
+        const grown = [vertex[0], vertex[1]];
+        grown[across] += edge.sign * BOLD_SEGMENT_OFFSET * growth / growingEdges.length;
+        return grown;
     });
 }
 
@@ -172,12 +203,8 @@ export function buildGlyphSvgMarkup(char, color, options = {}) {
         const tanSkew = Math.tan(ITALIC_SKEW_DEGREES * Math.PI / 180);
         // skewX() always pivots around y=500; recenter the transform there.
         const recenterX = tanSkew * centerY;
-        // Pad only for this glyph's actual ink extent (italicMaxYDelta), not
-        // the full 0-1000 range, so glyphs whose ink stays near the vertical
-        // center (colon, dash) don't get padded as if they were full-height.
-        // Kept in sync with getGlyphAspectRatio() via calculateItalicPad() —
-        // a mismatch here previously made italic cells render narrower than
-        // their actual (padded) SVG content, squeezing the glyph sideways.
+        // Pad by this glyph's real ink extent; must match
+        // getGlyphAspectRatio().
         const pad = calculateItalicPad(glyph);
         viewBoxX -= pad;
         viewBoxWidth += pad * 2;

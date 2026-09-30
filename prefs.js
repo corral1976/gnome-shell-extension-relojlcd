@@ -91,8 +91,8 @@ function drawPreviewChrome(cr, width, height, colors, glowValue, isRetro, showFr
     }
 }
 
-// GTK-process counterpart of glyphTexture.js's GlyphTextureCache — that one
-// targets St.ImageContent/Cogl, unavailable outside the Shell process.
+// GTK-side counterpart of GlyphTextureCache; St/Cogl don't exist outside
+// the Shell process.
 function rasterizeGlyph(cache, char, color, pixelWidth, pixelHeight, options) {
     const width = Math.max(1, Math.round(pixelWidth));
     const height = Math.max(1, Math.round(pixelHeight));
@@ -129,8 +129,7 @@ function drawGlyph(cr, cache, char, color, fontSize, styleOptions, x, centerY) {
     return cellWidth;
 }
 
-// For multi-character text only — a single glyph key like 'alarm' must go
-// through drawGlyph() directly, or this iterates its letters one by one.
+// Multi-character text only; single keys like 'alarm' go through drawGlyph().
 function drawGlyphRow(cr, cache, text, color, fontSize, styleOptions, startX, centerY) {
     let x = startX;
     for (const char of text)
@@ -300,8 +299,6 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
             margin_bottom: 6
         });
 
-        // Shared by both the size request and draw_func below so they never
-        // disagree on the layout numbers.
         const computePreviewLayout = () => {
             const fontSize = Math.min(settings.get_double('font-size'), PREVIEW_MAX_FONT_SIZE);
             const styleOptions = resolveGlyphStyleOptions(settings.get_string('font-style'));
@@ -976,14 +973,8 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
         resetRow.add_suffix(resetButton);
         resetGroup.add(resetRow);
 
-        // Settings changed elsewhere (e.g. the panel's quick color menu, a
-        // separate process) propagate here via dconf, so this window needs
-        // to listen instead of only reacting to its own widgets.
-        //
-        // `connectObject()` is a convenience the Shell process monkey-patches
-        // onto GObject.Object; it does not exist in this separate Preferences
-        // process, so plain `connect()` + manual disconnect on window close
-        // is used instead.
+        // connectObject() only exists in the Shell process; plain connect()
+        // plus manual disconnect on close-request here.
         const externalSyncHandlerIds = [
             settings.connect('changed::clock-color', () => {
                 const color = settings.get_string('clock-color');

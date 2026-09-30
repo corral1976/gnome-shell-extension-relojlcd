@@ -117,7 +117,7 @@
     <key name="vertical-panel-layout" type="b">
       <default>false</default>
       <summary>Vertical panel layout</summary>
-      <description>Show a compact layout (alarm bell, hours and minutes stacked, no seconds or date) instead of the normal horizontal display. Meant for a panel docked to the left or right edge of the screen, e.g. via Dash to Panel. Has no effect in desktop widget mode.</description>
+      <description>Show a compact layout (alarm bell, hours and minutes stacked, no seconds or date) instead of the normal horizontal display. Meant for a panel docked to the left or right edge of the screen, such as one provided by a third-party extension. Has no effect in desktop widget mode.</description>
     </key>
     <key name="widget-x" type="i">
       <default>100</default>

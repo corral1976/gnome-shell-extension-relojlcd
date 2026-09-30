@@ -35,19 +35,25 @@ class SevenSegmentRow extends St.Widget {
         this._reconcileCellCount(line, chars.length);
 
         const cellHeight = calculateCellPixelHeight(fontSize);
+        const styleKey = `${styleOptions.italic ? 1 : 0}${styleOptions.bold ? 1 : 0}`;
 
         for (let i = 0; i < chars.length; i++) {
             const char = chars[i];
             const cell = line.cells[i];
             const cellWidth = calculateCellPixelWidth(fontSize, char, styleOptions.italic);
-            cell.set_size(Math.max(1, Math.round(cellWidth)), Math.max(1, Math.round(cellHeight)));
+
+            const key = `${char}|${color}|${cellWidth}|${cellHeight}|${styleKey}`;
+            if (cell.key === key) continue;
+            cell.key = key;
+
+            cell.actor.set_size(Math.max(1, Math.round(cellWidth)), Math.max(1, Math.round(cellHeight)));
 
             if (isBlankGlyph(char)) {
-                cell.set_content(null);
+                cell.actor.set_content(null);
                 continue;
             }
 
-            cell.set_content(this._textureCache.getImage(char, color, cellWidth, cellHeight, styleOptions));
+            cell.actor.set_content(this._textureCache.getImage(char, color, cellWidth, cellHeight, styleOptions));
         }
     }
 
@@ -71,17 +77,17 @@ class SevenSegmentRow extends St.Widget {
 
     _reconcileCellCount(line, count) {
         while (line.cells.length < count) {
-            const cell = new Clutter.Actor({
+            const actor = new Clutter.Actor({
                 reactive: false,
                 content_gravity: Clutter.ContentGravity.RESIZE_ASPECT
             });
-            line.actor.add_child(cell);
-            line.cells.push(cell);
+            line.actor.add_child(actor);
+            line.cells.push({ actor, key: null });
         }
 
         while (line.cells.length > count) {
             const cell = line.cells.pop();
-            cell.destroy();
+            cell.actor.destroy();
         }
     }
 });
