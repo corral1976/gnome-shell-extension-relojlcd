@@ -1,6 +1,6 @@
 # Retro LCD 7-Segment Clock & Widget
 
-[![build](https://img.shields.io/github/actions/workflow/status/corral1976/gnome-shell-extension-relojlcd/blank.yml?style=flat-square&label=build&labelColor=282828&color=b8bb26)](https://github.com/corral1976/gnome-shell-extension-relojlcd/actions)
+[![build](https://img.shields.io/github/actions/workflow/status/corral1976/gnome-shell-extension-relojlcd/ci.yml?style=flat-square&label=build&labelColor=282828&color=b8bb26)](https://github.com/corral1976/gnome-shell-extension-relojlcd/actions)
 [![Latest Release](https://img.shields.io/github/v/release/corral1976/gnome-shell-extension-relojlcd)](https://github.com/corral1976/gnome-shell-extension-relojlcd/releases)
 [![stars](https://img.shields.io/github/stars/corral1976/gnome-shell-extension-relojlcd?style=flat-square&label=stars&labelColor=282828&color=d79921)](https://github.com/corral1976/gnome-shell-extension-relojlcd)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
