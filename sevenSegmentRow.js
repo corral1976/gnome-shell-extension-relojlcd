@@ -20,6 +20,16 @@ class SevenSegmentRow extends St.Widget {
 
         this._textureCache = textureCache;
         this._lines = [];
+        this._rasterScale = 1;
+    }
+
+    setRasterScale(scale) {
+        if (this._rasterScale === scale) return;
+        this._rasterScale = scale;
+        for (const line of this._lines) {
+            for (const cell of line.cells)
+                cell.key = null;
+        }
     }
 
     setText(text, color, fontSize, styleOptions = {}) {
@@ -42,7 +52,7 @@ class SevenSegmentRow extends St.Widget {
             const cell = line.cells[i];
             const cellWidth = calculateCellPixelWidth(fontSize, char, styleOptions.italic);
 
-            const key = `${char}|${color}|${cellWidth}|${cellHeight}|${styleKey}`;
+            const key = `${char}|${color}|${cellWidth}|${cellHeight}|${styleKey}|${this._rasterScale}`;
             if (cell.key === key) continue;
             cell.key = key;
 
@@ -53,7 +63,8 @@ class SevenSegmentRow extends St.Widget {
                 continue;
             }
 
-            cell.actor.set_content(this._textureCache.getImage(char, color, cellWidth, cellHeight, styleOptions));
+            cell.actor.set_content(this._textureCache.getImage(
+                char, color, cellWidth * this._rasterScale, cellHeight * this._rasterScale, styleOptions));
         }
     }
 

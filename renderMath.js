@@ -11,4 +11,3 @@ export function calculateRetroShadowOffset(glow, fontSize) {
     return glow * RETRO_OFFSET_PER_GLOW_UNIT * calculateSizeScale(fontSize);
 }
 
-

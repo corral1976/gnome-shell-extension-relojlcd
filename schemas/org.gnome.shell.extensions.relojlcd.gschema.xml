@@ -109,6 +109,16 @@
       <summary>Show date</summary>
       <description>Display current date below the time</description>
     </key>
+    <key name="date-format" type="s">
+      <choices>
+        <choice value="dmy"/>
+        <choice value="mdy"/>
+        <choice value="ymd"/>
+      </choices>
+      <default>'dmy'</default>
+      <summary>Date order</summary>
+      <description>Order of day, month and year when the date is shown: dmy for DD-MM-YYYY, mdy for MM-DD-YYYY, ymd for YYYY-MM-DD</description>
+    </key>
     <key name="is-widget" type="b">
       <default>false</default>
       <summary>Desktop widget mode</summary>
@@ -144,6 +154,11 @@
       <default>'regular'</default>
       <summary>Font style</summary>
       <description>Choose the font style (synthetic bold/italic)</description>
+    </key>
+    <key name="sharp-digits" type="b">
+      <default>true</default>
+      <summary>Sharp digits on HiDPI</summary>
+      <description>Draw the digits at the native resolution of the screen. When disabled they are drawn at the logical size and scaled up, which looks softer on high-resolution or scaled displays. Has no effect at 100% scale.</description>
     </key>
     <key name="ghost-segments" type="b">
       <default>false</default>

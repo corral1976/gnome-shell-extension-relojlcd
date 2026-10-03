@@ -1,0 +1,479 @@
+# Spanish translations for Retro LCD 7-Segment Clock.
+# Copyright (C) 2026 Carlos Corral
+# This file is distributed under the same license as the Retro LCD 7-Segment Clock package.
+# Carlos Corral, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Retro LCD 7-Segment Clock 80\n"
+"Report-Msgid-Bugs-To: https://gitlab.com/corral1976/gnome-shell-extension-"
+"relojlcd/-/issues\n"
+"POT-Creation-Date: 2026-10-02 19:02+0000\n"
+"PO-Revision-Date: 2026-10-02 19:02+0000\n"
+"Last-Translator: Carlos Corral\n"
+"Language-Team: Spanish\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: alarmDialog.js:14 alarmManager.js:153 alarmManager.js:215 prefs.js:508
+#: prefs.js:627 prefs.js:653
+msgid "Alarm"
+msgstr "Alarma"
+
+#: alarmDialog.js:21 alarmManager.js:219
+msgid "Snooze"
+msgstr "Posponer"
+
+#: alarmDialog.js:25 alarmManager.js:220
+msgid "Dismiss"
+msgstr "Descartar"
+
+#: extension.js:151 prefs.js:353
+msgid "Neon Green"
+msgstr "Verde neón"
+
+#: extension.js:152 prefs.js:353
+msgid "Vintage Amber"
+msgstr "Ámbar vintage"
+
+#: extension.js:153 prefs.js:353
+msgid "Retro LCD"
+msgstr "LCD retro"
+
+#: extension.js:154 prefs.js:353
+msgid "Red Ruby"
+msgstr "Rojo rubí"
+
+#: extension.js:155 prefs.js:353
+msgid "Blue Sapphire"
+msgstr "Azul zafiro"
+
+#: extension.js:156 prefs.js:353
+msgid "White LED"
+msgstr "LED blanco"
+
+#: extension.js:157 prefs.js:353
+msgid "Violet Purple"
+msgstr "Violeta púrpura"
+
+#: extension.js:158 prefs.js:353
+msgid "Gold"
+msgstr "Dorado"
+
+#: extension.js:159 prefs.js:353
+msgid "VFD Teal"
+msgstr "Verde azulado VFD"
+
+#: extension.js:160 prefs.js:353
+msgid "Nixie Orange"
+msgstr "Naranja Nixie"
+
+#: extension.js:176
+msgid "More Settings…"
+msgstr "Más ajustes…"
+
+#: extension.js:657
+#, javascript-format
+msgid "%s updated"
+msgstr "%s actualizado"
+
+#: extension.js:658
+#, javascript-format
+msgid "Now running version %s."
+msgstr "Ahora se ejecuta la versión %s."
+
+#: extension.js:936
+msgid "Alarm active"
+msgstr "Alarma activa"
+
+#: prefs.js:185
+msgid "General"
+msgstr "General"
+
+#: prefs.js:189
+msgid "Appearance"
+msgstr "Apariencia"
+
+#: prefs.js:193 prefs.js:476
+msgid "Alarms"
+msgstr "Alarmas"
+
+#: prefs.js:197 prefs.js:736
+msgid "About"
+msgstr "Acerca de"
+
+#: prefs.js:202
+msgid "Current Date"
+msgstr "Fecha actual"
+
+#: prefs.js:240
+msgid "Clock Behavior"
+msgstr "Comportamiento del reloj"
+
+#: prefs.js:241
+msgid "Choose what the clock shows and where it lives"
+msgstr "Elige qué muestra el reloj y dónde se ubica"
+
+#: prefs.js:246
+msgid "Desktop Widget Mode"
+msgstr "Modo widget de escritorio"
+
+#: prefs.js:247
+msgid "Show clock on desktop instead of the top bar"
+msgstr "Mostrar el reloj en el escritorio en lugar de la barra superior"
+
+#: prefs.js:249
+msgid "Vertical Panel Layout"
+msgstr "Disposición de panel vertical"
+
+#: prefs.js:250
+msgid ""
+"Compact layout (bell, hours, minutes stacked, no seconds or date) for a "
+"panel docked to the left or right edge of the screen. Not used in desktop "
+"widget mode."
+msgstr "Disposición compacta (campana, horas y minutos apilados, sin segundos ni fecha) para un panel anclado al borde izquierdo o derecho de la pantalla. No se usa en el modo widget de escritorio."
+
+#: prefs.js:254
+msgid "24-Hour Format"
+msgstr "Formato de 24 horas"
+
+#: prefs.js:255
+msgid "Display time in 24-hour format instead of AM/PM"
+msgstr "Mostrar la hora en formato de 24 horas en lugar de AM/PM"
+
+#: prefs.js:257
+msgid "Show Seconds"
+msgstr "Mostrar segundos"
+
+#: prefs.js:258
+msgid "Display seconds in the time display"
+msgstr "Mostrar los segundos en la hora"
+
+#: prefs.js:260
+msgid "Show Date"
+msgstr "Mostrar fecha"
+
+#: prefs.js:261
+msgid "Display current date below the time"
+msgstr "Mostrar la fecha actual debajo de la hora"
+
+#: prefs.js:264
+msgid "Date Order"
+msgstr "Orden de la fecha"
+
+#: prefs.js:265
+msgid "Order of day, month and year when the date is shown"
+msgstr "Orden del día, mes y año cuando se muestra la fecha"
+
+#: prefs.js:266
+msgid "DD-MM-YYYY"
+msgstr "DD-MM-AAAA"
+
+#: prefs.js:266
+msgid "MM-DD-YYYY"
+msgstr "MM-DD-AAAA"
+
+#: prefs.js:266
+msgid "YYYY-MM-DD"
+msgstr "AAAA-MM-DD"
+
+#: prefs.js:273
+msgid "Panel Position"
+msgstr "Posición en el panel"
+
+#: prefs.js:274
+msgid "Choose where the clock appears on the panel"
+msgstr "Elige dónde aparece el reloj en el panel"
+
+#: prefs.js:275
+msgid "Center"
+msgstr "Centro"
+
+#: prefs.js:275
+msgid "Left"
+msgstr "Izquierda"
+
+#: prefs.js:275
+msgid "Right"
+msgstr "Derecha"
+
+#: prefs.js:340
+msgid "Live preview"
+msgstr "Vista previa en vivo"
+
+#: prefs.js:345
+msgid "Color & Glow"
+msgstr "Color y brillo"
+
+#: prefs.js:346
+msgid "Pick a theme and tune how it glows"
+msgstr "Elige un tema y ajusta cómo brilla"
+
+#: prefs.js:351
+msgid "Color Theme"
+msgstr "Tema de color"
+
+#: prefs.js:352
+msgid "Choose your preferred LCD color style"
+msgstr "Elige tu estilo de color LCD preferido"
+
+#: prefs.js:353 prefs.js:365
+msgid "Custom Color"
+msgstr "Color personalizado"
+
+#: prefs.js:366
+msgid "Applies to digits, separators, alarm bell and border"
+msgstr "Se aplica a los dígitos, los separadores, la campana de alarma y el borde"
+
+#: prefs.js:389
+msgid "Glow / Shadow Intensity"
+msgstr "Intensidad del brillo / sombra"
+
+#: prefs.js:390
+msgid "Control glow for colored themes or shadow strength for Retro LCD"
+msgstr "Controla el brillo de los temas de color o la intensidad de la sombra en LCD retro"
+
+#: prefs.js:414
+msgid "Display Border"
+msgstr "Borde de la pantalla"
+
+#: prefs.js:415
+msgid ""
+"Hide the border outline around the display; the background and glow stay "
+"visible"
+msgstr "Oculta el contorno del borde de la pantalla; el fondo y el brillo siguen visibles"
+
+#: prefs.js:418
+msgid "Font & Effects"
+msgstr "Fuente y efectos"
+
+#: prefs.js:419
+msgid "Adjust size, style and vintage display effects"
+msgstr "Ajusta el tamaño, el estilo y los efectos de pantalla vintage"
+
+#: prefs.js:424
+msgid "Font Size"
+msgstr "Tamaño de fuente"
+
+#: prefs.js:425
+msgid "Adjust the clock display size"
+msgstr "Ajusta el tamaño del reloj"
+
+#: prefs.js:446
+msgid "Font Style"
+msgstr "Estilo de fuente"
+
+#: prefs.js:447
+msgid "Choose the font style (synthetic bold/italic)"
+msgstr "Elige el estilo de fuente (negrita y cursiva sintéticas)"
+
+#: prefs.js:448
+msgid "Bold"
+msgstr "Negrita"
+
+#: prefs.js:448
+msgid "Italic"
+msgstr "Cursiva"
+
+#: prefs.js:448
+msgid "Italic Bold"
+msgstr "Cursiva negrita"
+
+#: prefs.js:448
+msgid "Regular"
+msgstr "Normal"
+
+#: prefs.js:454
+msgid "Sharp Digits (HiDPI)"
+msgstr "Dígitos nítidos (HiDPI)"
+
+#: prefs.js:455
+msgid ""
+"Draw the digits at the native screen resolution. Turn off for a softer, "
+"retro look on high-resolution screens. No effect on screens without scaling"
+msgstr "Dibuja los dígitos a la resolución nativa de la pantalla. Desactívalo para un aspecto retro más suave en pantallas de alta resolución. No tiene efecto en pantallas sin escalado"
+
+#: prefs.js:457
+msgid "Blinking Separators"
+msgstr "Separadores parpadeantes"
+
+#: prefs.js:458
+msgid "Make the time separators blink for classic LCD effect"
+msgstr "Hace parpadear los separadores de la hora para el efecto clásico de LCD"
+
+#: prefs.js:460
+msgid "Flicker Effect"
+msgstr "Efecto de parpadeo"
+
+#: prefs.js:461
+msgid "Add subtle random flicker for vintage LCD display feel"
+msgstr "Añade un parpadeo aleatorio sutil para la sensación de una pantalla LCD vintage"
+
+#: prefs.js:463
+msgid "Ghost Segments"
+msgstr "Segmentos fantasma"
+
+#: prefs.js:464
+msgid "Show the unlit 7-segment pattern faintly behind the digits"
+msgstr "Muestra tenuemente el patrón de 7 segmentos apagados detrás de los dígitos"
+
+#: prefs.js:466
+msgid "Lamp Test on Startup"
+msgstr "Prueba de lámparas al iniciar"
+
+#: prefs.js:467
+msgid "Briefly flash all segments when the extension starts"
+msgstr "Enciende brevemente todos los segmentos al iniciar la extensión"
+
+#: prefs.js:469
+msgid "Minute Flicker"
+msgstr "Parpadeo de minuto"
+
+#: prefs.js:470
+msgid "Dip the brightness briefly whenever the minute changes"
+msgstr "Reduce brevemente el brillo cada vez que cambia el minuto"
+
+#: prefs.js:472
+msgid "CRT Scanlines"
+msgstr "Líneas de barrido CRT"
+
+#: prefs.js:473
+msgid "Overlay faint horizontal scanlines for a CRT/VFD look"
+msgstr "Superpone tenues líneas de barrido horizontales para un aspecto CRT/VFD"
+
+#: prefs.js:477
+msgid "Add one or more alarms; each one can be snoozed independently"
+msgstr "Añade una o más alarmas; cada una se puede posponer de forma independiente"
+
+#: prefs.js:495
+msgid "Every day"
+msgstr "Todos los días"
+
+#: prefs.js:498
+msgid "Add New Alarm"
+msgstr "Añadir nueva alarma"
+
+#: prefs.js:522
+msgid "Time"
+msgstr "Hora"
+
+#: prefs.js:551
+msgid "Specific Date"
+msgstr "Fecha específica"
+
+#: prefs.js:552
+msgid "Ring once on a chosen date instead of every day"
+msgstr "Suena una sola vez en una fecha elegida en lugar de todos los días"
+
+#: prefs.js:557
+msgid "Date"
+msgstr "Fecha"
+
+#: prefs.js:622
+msgid "Label"
+msgstr "Etiqueta"
+
+#: prefs.js:632
+msgid "Remove This Alarm"
+msgstr "Eliminar esta alarma"
+
+#: prefs.js:664
+msgid "Sound & Snooze"
+msgstr "Sonido y posposición"
+
+#: prefs.js:669
+msgid "Test Alarm Sound"
+msgstr "Probar el sonido de la alarma"
+
+#: prefs.js:670
+msgid "Play or stop the alarm sound to preview it"
+msgstr "Reproduce o detiene el sonido de la alarma para escucharlo"
+
+#: prefs.js:719
+msgid "Snooze Duration"
+msgstr "Duración de la posposición"
+
+#: prefs.js:720
+msgid "Minutes to wait before a snoozed alarm rings again"
+msgstr "Minutos de espera antes de que una alarma pospuesta vuelva a sonar"
+
+#: prefs.js:732
+msgid "On-Screen Alarm Dialog"
+msgstr "Diálogo de alarma en pantalla"
+
+#: prefs.js:733
+msgid ""
+"Show a dialog instead of a notification when an alarm rings, so it is not "
+"missed if notifications are silenced"
+msgstr "Muestra un diálogo en lugar de una notificación cuando suena una alarma, para no perdérsela si las notificaciones están silenciadas"
+
+#: prefs.js:737
+msgid "Information and credits"
+msgstr "Información y créditos"
+
+#: prefs.js:742
+msgid "Version"
+msgstr "Versión"
+
+#: prefs.js:749
+msgid "Author"
+msgstr "Autor"
+
+#: prefs.js:756
+msgid "Source Code"
+msgstr "Código fuente"
+
+#: prefs.js:757
+msgid "View on GitLab"
+msgstr "Ver en GitLab"
+
+#: prefs.js:760
+msgid "Open Repository"
+msgstr "Abrir repositorio"
+
+#: prefs.js:773
+msgid "Support Us"
+msgstr "Apóyanos"
+
+#: prefs.js:778
+msgid "Support on Ko-fi"
+msgstr "Apoyar en Ko-fi"
+
+#: prefs.js:779
+msgid "Buy the developer a coffee"
+msgstr "Invita un café al desarrollador"
+
+#: prefs.js:782
+msgid "Open Ko-fi"
+msgstr "Abrir Ko-fi"
+
+#: prefs.js:795 prefs.js:802 prefs.js:822
+msgid "Reset"
+msgstr "Restablecer"
+
+#: prefs.js:796
+msgid ""
+"Restore appearance and clock settings to their defaults. Your alarms are not "
+"affected."
+msgstr "Restablece los ajustes de apariencia y del reloj a sus valores predeterminados. Tus alarmas no se ven afectadas."
+
+#: prefs.js:800
+msgid "Reset to Defaults"
+msgstr "Restablecer valores predeterminados"
+
+#: prefs.js:816
+msgid "Reset to Defaults?"
+msgstr "¿Restablecer valores predeterminados?"
+
+#: prefs.js:817
+msgid ""
+"This will restore appearance and clock settings to their defaults. Your "
+"alarms will not be affected."
+msgstr "Esto restablecerá los ajustes de apariencia y del reloj a sus valores predeterminados. Tus alarmas no se verán afectadas."
+
+#: prefs.js:821
+msgid "Cancel"
+msgstr "Cancelar"

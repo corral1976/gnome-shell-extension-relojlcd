@@ -7,6 +7,7 @@ import * as Config from 'resource:///org/gnome/shell/misc/config.js';
 import { buildGlyphSvgMarkup } from './glyphAssets.js';
 
 const textEncoder = new TextEncoder();
+const MAX_CACHED_CONTENTS = 512;
 const SHELL_MAJOR_VERSION = parseInt(Config.PACKAGE_VERSION.split('.')[0], 10);
 
 export class GlyphTextureCache {
@@ -20,14 +21,20 @@ export class GlyphTextureCache {
         const { italic = false, bold = false } = options;
         const key = `${char}|${color}|${width}|${height}|${italic ? 1 : 0}${bold ? 1 : 0}`;
 
-        let content = this._contents.get(key);
-        if (content) return content;
+        if (this._contents.has(key)) return this._contents.get(key);
 
         const markup = buildGlyphSvgMarkup(char, color, options);
         if (!markup) return null;
 
-        content = this._rasterizeToContent(markup, width, height);
+        let content = null;
+        try {
+            content = this._rasterizeToContent(markup, width, height);
+        } catch (e) {
+            console.error(`RelojLCD: Failed to rasterize glyph '${char}'`, e);
+        }
         this._contents.set(key, content);
+        if (this._contents.size > MAX_CACHED_CONTENTS)
+            this._contents.delete(this._contents.keys().next().value);
         return content;
     }
 

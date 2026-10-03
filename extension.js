@@ -8,13 +8,13 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
-import { ModalDialog } from 'resource:///org/gnome/shell/ui/modalDialog.js';
 import { Extension, gettext as _ } from 'resource:///org/gnome/shell/extensions/extension.js';
 import { buildCustomTheme, buildTheme, PRESET_COLORS } from './colorUtils.js';
 import {
     calculateRetroShadowOffset,
     RETRO_SHADOW_RGBA
 } from './renderMath.js';
+import { AlarmManager } from './alarmManager.js';
 import { GlyphTextureCache } from './glyphTexture.js';
 import { SevenSegmentRow } from './sevenSegmentRow.js';
 import {
@@ -51,6 +51,22 @@ const MINUTE_FLICKER_RESTORE_MS = 140;
 const SCANLINES_OPACITY = 0.15;
 const SCANLINES_LINE_RATIO = 0.08;
 const SCANLINES_MIN_SPACING = 2;
+const ALARM_BLINK_INTERVAL_MS = 500;
+const ALARM_BLINK_DIM_OPACITY = 40;
+const DATE_FORMATS = {
+    dmy: '%d-%m-%Y',
+    mdy: '%m-%d-%Y',
+    ymd: '%Y-%m-%d'
+};
+const CLOCK_TICK_INTERVAL_MS = 1000;
+const CLOCK_BLINK_TICK_INTERVAL_MS = 500;
+const CLOCK_TICK_MARGIN_MS = 10;
+const BLINK_ON_MICROSECONDS = 500000;
+
+function calculateTickDelayMs(microsecond, intervalMs) {
+    const elapsedMs = Math.floor(microsecond / 1000) % intervalMs;
+    return intervalMs - elapsedMs + CLOCK_TICK_MARGIN_MS;
+}
 
 const FLICKER_THRESHOLDS = {
     white: [
@@ -73,37 +89,11 @@ const FLICKER_THRESHOLDS = {
     ]
 };
 
-const AlarmDialog = GObject.registerClass(
-{ GTypeName: 'RelojLCDAlarmDialog' },
-class AlarmDialog extends ModalDialog {
-    _init(alarm, onSnooze, onDismiss) {
-        super._init({ styleClass: 'reloj-lcd-alarm-dialog' });
-
-        this.contentLayout.add_child(new St.Label({
-            text: alarm.label || _('Alarm'),
-            style_class: 'reloj-lcd-alarm-dialog-label',
-            x_align: Clutter.ActorAlign.CENTER
-        }));
-
-        this.setButtons([
-            {
-                label: _('Snooze'),
-                action: onSnooze
-            },
-            {
-                label: _('Dismiss'),
-                action: onDismiss,
-                default: true
-            }
-        ]);
-    }
-});
-
 const RelojLCDIndicator = GObject.registerClass(
 { GTypeName: 'RelojLCDIndicator' },
 class RelojLCDIndicator extends PanelMenu.Button {
-    _init(settings, openPreferences, isAlarming, stopAlarm) {
-        super._init(0.5, 'RelojLCD', false);
+    _init(name, settings, openPreferences, isAlarming, stopAlarm) {
+        super._init(0.5, name, false);
 
         this._settings = settings;
         this._openPreferences = openPreferences;
@@ -118,18 +108,33 @@ class RelojLCDIndicator extends PanelMenu.Button {
             if (isOpen) this._refreshQuickColorMenu();
         });
 
-        this._clickHandlerId = this.connect('button-release-event', () => {
-            if (this._isAlarming()) {
+        this._capturedEventId = this.connect('captured-event', (actor, event) => {
+            if (!this._isAlarming()) return Clutter.EVENT_PROPAGATE;
+
+            switch (event.type()) {
+            case Clutter.EventType.BUTTON_PRESS:
+            case Clutter.EventType.TOUCH_BEGIN:
+                return Clutter.EVENT_STOP;
+            case Clutter.EventType.BUTTON_RELEASE:
+            case Clutter.EventType.TOUCH_END:
                 this._stopAlarm();
                 return Clutter.EVENT_STOP;
+            default:
+                return Clutter.EVENT_PROPAGATE;
             }
+        });
 
+        this._clickHandlerId = this.connect('button-release-event', () => {
             this.menu.toggle();
             return Clutter.EVENT_STOP;
         });
     }
 
     destroy() {
+        if (this._capturedEventId) {
+            this.disconnect(this._capturedEventId);
+            this._capturedEventId = 0;
+        }
         if (this._clickHandlerId) {
             this.disconnect(this._clickHandlerId);
             this._clickHandlerId = 0;
@@ -185,21 +190,9 @@ class RelojLCDIndicator extends PanelMenu.Button {
 export default class RelojLCDExtension extends Extension {
     enable() {
         this._settings = this.getSettings();
-        this._isAlarming = false;
-        this._alarms = [];
-        this._lastAlarmStamps = new Map();
-        this._pendingAlarms = [];
-        this._snoozeTimeoutIds = new Map();
-        this._activeNotification = null;
-        this._alarmDialog = null;
-        this._lastCheckedTime = null;
-        this._dotState = true;
+        this._alarmManager = null;
         this._alarmBlinkState = true;
         this._clockTimeoutId = null;
-        this._alarmTimeoutId = null;
-        this._alarmSoundTimeoutId = null;
-        this._alarmSoundCancellable = null;
-        this._testSoundCancellable = null;
         this._blinkTimeoutId = null;
         this._initTimeoutId = null;
         this._panelFitIdleId = null;
@@ -211,8 +204,6 @@ export default class RelojLCDExtension extends Extension {
         this._dragHandler = null;
         this._releaseHandler = null;
         this._signals = [];
-        this._lastAppliedStyle = null;
-        this._lastAppliedContainerStyle = null;
         this._alarmDot = null;
         this._alarmDotShadow = null;
         this._alarmDotWrapper = null;
@@ -230,31 +221,36 @@ export default class RelojLCDExtension extends Extension {
         this._glyphTextureCache = null;
         this._horizontalCenteringOffset = 0;
         this._retroShadowOffset = 0;
+        this._rasterScale = 1;
 
-        this._migrateLegacyAlarm();
-        this._alarms = this._parseAlarms();
+        this._alarmManager = new AlarmManager(this._settings, {
+            title: this.metadata.name,
+            onRingingChanged: isRinging => this._onAlarmRingingChanged(isRinging),
+            onAlarmsChanged: () => { this._updateAlarmDot(); this._updateClock(); }
+        });
 
         this._glyphTextureCache = new GlyphTextureCache();
         this._buildIndicator();
 
+        Main.layoutManager.connectObject('monitors-changed', () => this._relocateWidget(), this);
+
         this._settings.connectObject(
-            'changed::font-size', () => { this._invalidateStyleCache(); this._scheduleStyleUpdate(); },
-            'changed::clock-color', () => { this._invalidateStyleCache(); this._updateStyle(); },
-            'changed::custom-color', () => { this._invalidateStyleCache(); this._updateStyle(); },
-            'changed::show-frame', () => { this._invalidateStyleCache(); this._updateStyle(); },
-            'changed::glow-intensity', () => { this._invalidateStyleCache(); this._scheduleStyleUpdate(); },
-            'changed::show-seconds', () => { this._invalidateStyleCache(); this._updateClock(); this._updateStyle(); },
-            'changed::show-date', () => { this._invalidateStyleCache(); this._updateClock(); this._updateStyle(); },
-            'changed::vertical-panel-layout', () => { this._invalidateStyleCache(); this._updateClock(); this._updateStyle(); },
+            'changed::font-size', () => this._scheduleStyleUpdate(),
+            'changed::clock-color', () => this._updateStyle(),
+            'changed::custom-color', () => this._updateStyle(),
+            'changed::show-frame', () => this._updateStyle(),
+            'changed::glow-intensity', () => this._scheduleStyleUpdate(),
+            'changed::show-seconds', () => { this._updateClock(); this._updateStyle(); },
+            'changed::show-date', () => { this._updateClock(); this._updateStyle(); },
+            'changed::date-format', () => this._updateClock(),
+            'changed::vertical-panel-layout', () => { this._updateClock(); this._updateStyle(); },
             'changed::blink-dots', () => this._updateClock(),
-            'changed::clock-format-24h', () => this._updateClock(),
+            'changed::clock-format-24h', () => { this._updateClock(); this._updateStyle(); },
             'changed::panel-position', () => this._resetView(),
             'changed::is-widget', () => this._resetView(),
             'changed::flicker-enabled', () => this._updateFlicker(),
-            'changed::alarms', () => { this._alarms = this._parseAlarms(); this._updateAlarmDot(); this._updateClock(); },
-            'changed::font-style', () => { this._invalidateStyleCache(); this._updateStyle(); },
-            'changed::test-alarm-counter', () => this._startTestSound(),
-            'changed::test-alarm-stop-counter', () => this._stopTestSound(),
+            'changed::font-style', () => this._updateStyle(),
+            'changed::sharp-digits', () => this._updateClock(),
             'changed::ghost-segments', () => { this._updateGhostOpacity(); this._updateAlarmDot(); },
             'changed::crt-scanlines', () => this._updateScanlines(),
             this
@@ -267,13 +263,11 @@ export default class RelojLCDExtension extends Extension {
     }
 
     disable() {
+        Main.layoutManager.disconnectObject(this);
         this._teardownInProgress = true;
-        this._stopAlarm(false);
-        this._stopTestSound();
-
-        for (const timeoutId of this._snoozeTimeoutIds.values())
-            GLib.Source.remove(timeoutId);
-        this._snoozeTimeoutIds.clear();
+        this._alarmManager.destroy();
+        this._alarmManager = null;
+        this._stopAlarmBlink();
 
         this._removeClockTimeout();
         this._removeFlickerTimeout();
@@ -351,57 +345,7 @@ export default class RelojLCDExtension extends Extension {
         this._glyphTextureCache?.clear();
         this._glyphTextureCache = null;
 
-        this._invalidateStyleCache();
-        this._alarms = [];
-        this._pendingAlarms = [];
-        this._lastAlarmStamps.clear();
-        this._lastCheckedTime = null;
         this._lastMinute = -1;
-    }
-
-    _invalidateStyleCache() {
-        this._lastAppliedStyle = null;
-        this._lastAppliedContainerStyle = null;
-    }
-
-    _parseAlarms() {
-        let parsed;
-        try {
-            parsed = JSON.parse(this._settings.get_string('alarms'));
-        } catch {
-            parsed = [];
-        }
-        if (!Array.isArray(parsed)) return [];
-        return parsed.filter(alarm => {
-            if (!alarm || typeof alarm.id !== 'string') return false;
-            if (!Number.isInteger(alarm.hour) || alarm.hour < 0 || alarm.hour > 23) return false;
-            if (!Number.isInteger(alarm.minute) || alarm.minute < 0 || alarm.minute > 59) return false;
-
-            const hasDate = alarm.year !== undefined || alarm.month !== undefined || alarm.day !== undefined;
-            if (!hasDate) return true;
-
-            if (!Number.isInteger(alarm.year) || alarm.year < 1970 || alarm.year > 9999) return false;
-            if (!Number.isInteger(alarm.month) || alarm.month < 1 || alarm.month > 12) return false;
-            if (!Number.isInteger(alarm.day) || alarm.day < 1 || alarm.day > 31) return false;
-
-            return GLib.DateTime.new_local(alarm.year, alarm.month, alarm.day, alarm.hour, alarm.minute, 0) !== null;
-        });
-    }
-
-    _migrateLegacyAlarm() {
-        if (this._settings.get_boolean('alarms-migrated')) return;
-        this._settings.set_boolean('alarms-migrated', true);
-
-        if (!this._settings.get_boolean('alarm-enabled')) return;
-
-        const legacyAlarm = {
-            id: GLib.uuid_string_random(),
-            hour: this._settings.get_int('alarm-hour'),
-            minute: this._settings.get_int('alarm-minute'),
-            enabled: true,
-            label: this._settings.get_string('alarm-message') || _('Alarm')
-        };
-        this._settings.set_string('alarms', JSON.stringify([legacyAlarm]));
     }
 
     _connect(obj, signal, callback) {
@@ -432,8 +376,6 @@ export default class RelojLCDExtension extends Extension {
     }
 
     _resetView() {
-        // destroy() can fire a theme 'changed' synchronously; unhook and
-        // null everything first or _updateStyle() hits disposed actors.
         this._teardownInProgress = true;
         this._removePanelFitIdle();
         this._disconnectIndicatorSignals();
@@ -443,7 +385,6 @@ export default class RelojLCDExtension extends Extension {
             themeContext.disconnect(this._themeContextId);
             this._themeContextId = null;
         }
-        this._invalidateStyleCache();
         this._clockContainer = null;
         this._clockLabel = null;
         this._shadowLabel = null;
@@ -507,7 +448,7 @@ export default class RelojLCDExtension extends Extension {
     _updateFlicker() {
         this._removeFlickerTimeout();
 
-        if (!this._settings.get_boolean('flicker-enabled') || this._isAlarming) {
+        if (!this._settings.get_boolean('flicker-enabled') || this._alarmManager.isRinging) {
             if (this._clockLabel) {
                 this._clockLabel.set_opacity(255);
             }
@@ -522,7 +463,7 @@ export default class RelojLCDExtension extends Extension {
         const thresholds = FLICKER_THRESHOLDS[colorType] || FLICKER_THRESHOLDS.default;
 
         const flicker = () => {
-            if (this._teardownInProgress || !this._settings || !this._clockLabel || !this._settings.get_boolean('flicker-enabled') || this._isAlarming) {
+            if (this._teardownInProgress || !this._settings || !this._clockLabel || !this._settings.get_boolean('flicker-enabled') || this._alarmManager.isRinging) {
                 this._flickerTimeoutId = null;
                 return GLib.SOURCE_REMOVE;
             }
@@ -565,6 +506,32 @@ export default class RelojLCDExtension extends Extension {
         return !this._settings.get_boolean('is-widget') && this._settings.get_boolean('vertical-panel-layout');
     }
 
+    _getRasterScale() {
+        if (!this._settings.get_boolean('sharp-digits')) return 1;
+
+        let monitor = Main.layoutManager.primaryMonitor;
+        if (this._settings.get_boolean('is-widget')) {
+            const [x, y] = this._indicator
+                ? [this._indicator.x, this._indicator.y]
+                : this._getClampedWidgetPosition();
+            monitor = Main.layoutManager.monitors.find(candidate =>
+                x >= candidate.x && x < candidate.x + candidate.width &&
+                y >= candidate.y && y < candidate.y + candidate.height) ?? monitor;
+        }
+        return Math.max(1, global.display.get_monitor_scale(monitor.index));
+    }
+
+    _applyRasterScale() {
+        const scale = this._getRasterScale();
+        if (scale === this._rasterScale) return false;
+
+        this._rasterScale = scale;
+        this._clockLabel?.setRasterScale(scale);
+        this._shadowLabel?.setRasterScale(scale);
+        this._ghostLabel?.setRasterScale(scale);
+        return true;
+    }
+
     _getEffectiveFontSize() {
         const fontSize = this._settings.get_double('font-size');
         const parentWidth = this._isCompactLayout() ? (this._indicator?.get_parent()?.get_width() ?? 0) : 0;
@@ -590,15 +557,12 @@ export default class RelojLCDExtension extends Extension {
             this._panelFitIdleId = null;
             if (this._teardownInProgress || !this._settings || !this._clockLabel) return GLib.SOURCE_REMOVE;
             if (this._getEffectiveFontSize() === this._effectiveFontSize) return GLib.SOURCE_REMOVE;
-            this._invalidateStyleCache();
             this._updateStyle();
             this._updateClock();
             return GLib.SOURCE_REMOVE;
         });
     }
 
-    // Cells don't shrink in a narrow panel and overflow to the right; shift
-    // left by half the overflow and clip so both sides are cropped evenly.
     _updateHorizontalCentering() {
         if (!this._clockContainer || !this._clockLabel || !this._ghostLabel || !this._shadowLabel) return;
 
@@ -608,7 +572,6 @@ export default class RelojLCDExtension extends Extension {
         const [, naturalWidth] = this._clockLabel.get_preferred_width(-1);
         const overflow = Math.max(0, naturalWidth - availableWidth);
         this._horizontalCenteringOffset = -overflow / 2;
-        // Clip only while squeezed; an always-on clip cuts the retro shadow.
         this._clockContainer.clip_to_allocation = overflow > 0.5;
 
         this._clockLabel.set_translation(this._horizontalCenteringOffset, 0, 0);
@@ -686,7 +649,7 @@ export default class RelojLCDExtension extends Extension {
         const source = MessageTray.getSystemSource();
         const notification = new MessageTray.Notification({
             source,
-            title: _('Retro LCD Clock updated'),
+            title: _('%s updated').format(this.metadata.name),
             body: _('Now running version %s.').format(currentVersion),
             gicon: Gio.ThemedIcon.new('preferences-system-time-symbolic')
         });
@@ -708,6 +671,13 @@ export default class RelojLCDExtension extends Extension {
         });
     }
 
+    _relocateWidget() {
+        if (!this._isChromeIndicator || !this._indicator) return;
+
+        const [x, y] = this._getClampedWidgetPosition();
+        this._indicator.set_position(x, y);
+    }
+
     _getClampedWidgetPosition() {
         const x = this._settings.get_int('widget-x');
         const y = this._settings.get_int('widget-y');
@@ -725,8 +695,8 @@ export default class RelojLCDExtension extends Extension {
 
     _setupDragHandlers(actor) {
         this._connect(actor, 'button-press-event', (actor, event) => {
-            if (this._isAlarming) {
-                this._stopAlarm();
+            if (this._alarmManager.isRinging) {
+                this._alarmManager.stopRinging();
                 return Clutter.EVENT_STOP;
             }
 
@@ -785,13 +755,14 @@ export default class RelojLCDExtension extends Extension {
     }
 
     _buildIndicator() {
-        // No allocation yet on first build; redrawing now makes Mutter warn.
         this._skipInitialRedraw = true;
         const isWidget = this._settings.get_boolean('is-widget');
         const compact = !isWidget && this._settings.get_boolean('vertical-panel-layout');
         const showSeconds = compact ? false : this._settings.get_boolean('show-seconds');
         const showDate = compact ? false : this._settings.get_boolean('show-date');
+        const is24h = this._settings.get_boolean('clock-format-24h');
         const glyphOptions = resolveGlyphStyleOptions(this._settings.get_string('font-style'));
+        this._rasterScale = this._getRasterScale();
 
         this._clockLabel = new SevenSegmentRow(this._glyphTextureCache, {
             y_align: Clutter.ActorAlign.CENTER,
@@ -800,8 +771,9 @@ export default class RelojLCDExtension extends Extension {
             y_expand: true,
             style_class: 'reloj-lcd-label'
         });
+        this._clockLabel.setRasterScale(this._rasterScale);
         this._clockLabel.setText(
-            this._getPlaceholderText(showSeconds, showDate, isWidget, compact),
+            this._getPlaceholderText(showSeconds, showDate, isWidget, is24h, compact),
             this._getTheme(this._settings.get_string('clock-color')).main,
             this._getEffectiveFontSize(),
             glyphOptions);
@@ -813,8 +785,9 @@ export default class RelojLCDExtension extends Extension {
             y_expand: true,
             style_class: 'reloj-lcd-shadow-label'
         });
+        this._shadowLabel.setRasterScale(this._rasterScale);
         this._shadowLabel.setText(
-            this._getPlaceholderText(showSeconds, showDate, isWidget, compact),
+            this._getPlaceholderText(showSeconds, showDate, isWidget, is24h, compact),
             RETRO_SHADOW_RGBA,
             this._getEffectiveFontSize(),
             glyphOptions);
@@ -827,8 +800,9 @@ export default class RelojLCDExtension extends Extension {
             opacity: 0,
             style_class: 'reloj-lcd-ghost-label'
         });
+        this._ghostLabel.setRasterScale(this._rasterScale);
         this._ghostLabel.setText(
-            this._getPlaceholderText(showSeconds, showDate, isWidget, compact),
+            this._getPlaceholderText(showSeconds, showDate, isWidget, is24h, compact),
             this._getTheme(this._settings.get_string('clock-color')).main,
             this._getEffectiveFontSize(),
             glyphOptions);
@@ -854,8 +828,6 @@ export default class RelojLCDExtension extends Extension {
         this._clockContainer = new St.Widget({
             layout_manager: new Clutter.BinLayout(),
             offscreen_redirect: Clutter.OffscreenRedirect.ALWAYS,
-            // CENTER on purpose: with FILL the clock is squashed to the narrow
-            // vertical panel width and the overflow sticks to the left.
             x_align: Clutter.ActorAlign.CENTER
         });
 
@@ -903,7 +875,6 @@ export default class RelojLCDExtension extends Extension {
         this._alarmDotWrapper.add_child(this._alarmDot);
 
         this._container = new St.BoxLayout({
-            style_class: 'reloj-lcd-container',
             orientation: Clutter.Orientation.HORIZONTAL,
             clip_to_allocation: false,
             x_expand: true,
@@ -928,8 +899,7 @@ export default class RelojLCDExtension extends Extension {
                 can_focus: true,
                 track_hover: true,
                 x: widgetX,
-                y: widgetY,
-                style: 'opacity: 1.0; -st-shadow: none;'
+                y: widgetY
             });
             this._indicator.set_child(this._displayWrapper);
             this._setupDragHandlers(this._indicator);
@@ -939,10 +909,11 @@ export default class RelojLCDExtension extends Extension {
             this._isChromeIndicator = false;
             const pos = this._settings.get_string('panel-position');
             this._indicator = new RelojLCDIndicator(
+                this.metadata.name,
                 this._settings,
                 () => this.openPreferences(),
-                () => this._isAlarming,
-                () => this._stopAlarm()
+                () => this._alarmManager.isRinging,
+                () => this._alarmManager.stopRinging()
             );
             this._displayWrapper.y_align = Clutter.ActorAlign.CENTER;
             this._displayWrapper.y_expand = false;
@@ -962,7 +933,6 @@ export default class RelojLCDExtension extends Extension {
         const themeContext = St.ThemeContext.get_for_stage(global.stage);
         this._themeContextId = themeContext.connect('changed', () => {
             if (this._teardownInProgress) return;
-            this._invalidateStyleCache();
             this._updateStyle();
         });
 
@@ -979,27 +949,34 @@ export default class RelojLCDExtension extends Extension {
         this._removeClockTimeout();
 
         const update = () => {
-            if (this._teardownInProgress || !this._settings || !this._clockLabel) {
-                this._clockTimeoutId = null;
+            this._clockTimeoutId = null;
+            if (this._teardownInProgress || !this._settings || !this._clockLabel)
                 return GLib.SOURCE_REMOVE;
-            }
 
             const now = GLib.DateTime.new_now_local();
+            const blink = this._settings.get_boolean('blink-dots');
+            const tickIntervalMs = blink ? CLOCK_BLINK_TICK_INTERVAL_MS : CLOCK_TICK_INTERVAL_MS;
+            this._clockTimeoutId = GLib.timeout_add(
+                GLib.PRIORITY_DEFAULT, calculateTickDelayMs(now.get_microsecond(), tickIntervalMs), update);
+
             const is24h = this._settings.get_boolean('clock-format-24h');
             const isWidget = this._settings.get_boolean('is-widget');
             const compact = !isWidget && this._settings.get_boolean('vertical-panel-layout');
             const showSeconds = compact ? false : this._settings.get_boolean('show-seconds');
             const showDate = compact ? false : this._settings.get_boolean('show-date');
-            const blink = this._settings.get_boolean('blink-dots');
             const colorType = this._settings.get_string('clock-color');
             const glow = this._settings.get_double('glow-intensity');
             const fontSize = this._getEffectiveFontSize();
             const glyphOptions = resolveGlyphStyleOptions(this._settings.get_string('font-style'));
 
+            if (this._applyRasterScale()) {
+                this._updateStyle();
+            }
+
             const timeStr = this._formatTime(now, is24h, showSeconds, showDate, isWidget, blink, compact);
 
             const currentMinute = now.get_minute();
-            if (this._settings.get_boolean('minute-flicker') && !this._isAlarming &&
+            if (this._settings.get_boolean('minute-flicker') && !this._alarmManager.isRinging &&
                 this._lastMinute !== -1 && currentMinute !== this._lastMinute) {
                 this._playMinuteFlicker();
             }
@@ -1015,40 +992,36 @@ export default class RelojLCDExtension extends Extension {
             }
 
             this._updateHorizontalCentering();
-            this._checkAlarm(now);
-            return GLib.SOURCE_CONTINUE;
+            this._alarmManager.checkAlarms(now);
+            return GLib.SOURCE_REMOVE;
         };
 
         update();
-
-        const interval = this._settings.get_boolean('blink-dots') ? 500 : 1000;
-
-        this._clockTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, interval, update);
     }
 
     _formatTime(now, is24h, showSeconds, showDate, isWidget, blink, compact = false) {
-        this._dotState = blink ? !this._dotState : true;
-
-        // Compact layout: no separator, seconds or date, just HH over MM.
         if (compact) {
             const format = is24h ? '%H\n%M' : '%I\n%M';
             return now.format(format);
         }
 
-        const sepChar = this._dotState ? ':' : ' ';
+        const separatorOn = !blink || now.get_microsecond() < BLINK_ON_MICROSECONDS;
+        const sepChar = separatorOn ? ':' : ' ';
         const sep = ` ${sepChar} `;
+
+        const meridiem = now.get_hour() < 12 ? 'AM' : 'PM';
 
         let timeStr;
         if (showSeconds) {
-            const format = is24h ? `%H${sep}%M${sep}%S` : `%I${sep}%M${sep}%S %p`;
+            const format = is24h ? `%H${sep}%M${sep}%S` : `%I${sep}%M${sep}%S ${meridiem}`;
             timeStr = now.format(format);
         } else {
-            const format = is24h ? `%H${sep}%M` : `%I${sep}%M %p`;
+            const format = is24h ? `%H${sep}%M` : `%I${sep}%M ${meridiem}`;
             timeStr = now.format(format);
         }
 
         if (showDate) {
-            const dateStr = now.format('%d-%m-%Y');
+            const dateStr = now.format(DATE_FORMATS[this._settings.get_string('date-format')]);
             if (isWidget) {
                 timeStr = `${timeStr}\n${dateStr}`;
             } else {
@@ -1061,13 +1034,13 @@ export default class RelojLCDExtension extends Extension {
 
     _formatAccessibleTime(now, is24h) {
         const format = is24h ? '%H:%M' : '%I:%M %p';
-        return `${_('Retro LCD Clock')}, ${now.format(format)}`;
+        return `${this.metadata.name}, ${now.format(format)}`;
     }
 
     _updateAlarmDot() {
         if (!this._alarmDotWrapper || !this._settings) return;
 
-        const hasEnabledAlarm = this._alarms.some(alarm => alarm.enabled);
+        const hasEnabledAlarm = this._alarmManager.hasEnabledAlarm;
         const ghostEnabled = this._settings.get_boolean('ghost-segments');
 
         this._alarmDotWrapper.visible = hasEnabledAlarm || ghostEnabled;
@@ -1076,194 +1049,39 @@ export default class RelojLCDExtension extends Extension {
         }
     }
 
-    _disableOneTimeAlarm(alarm) {
-        alarm.enabled = false;
-        this._settings.set_string('alarms', JSON.stringify(this._alarms));
-        this._updateAlarmDot();
-    }
-
-    _checkAlarm(now) {
-        const previousCheckedTime = this._lastCheckedTime;
-        this._lastCheckedTime = now;
-
-        if (!this._alarms.length) return;
-
-        for (const alarm of this._alarms) {
-            if (!alarm.enabled) continue;
-
-            const hasDate = alarm.year !== undefined;
-            const target = hasDate
-                ? GLib.DateTime.new_local(alarm.year, alarm.month, alarm.day, alarm.hour, alarm.minute, 0)
-                : GLib.DateTime.new_local(now.get_year(), now.get_month(), now.get_day_of_month(), alarm.hour, alarm.minute, 0);
-
-            const reachedTarget = previousCheckedTime
-                ? previousCheckedTime.compare(target) < 0 && now.compare(target) >= 0
-                : (hasDate
-                    ? now.get_year() === alarm.year && now.get_month() === alarm.month && now.get_day_of_month() === alarm.day &&
-                      now.get_hour() === alarm.hour && now.get_minute() === alarm.minute
-                    : now.get_hour() === alarm.hour && now.get_minute() === alarm.minute);
-
-            if (!reachedTarget) continue;
-
-            const stamp = `${now.get_year()}-${now.get_day_of_year()}-${alarm.hour}:${alarm.minute}`;
-            if (this._lastAlarmStamps.get(alarm.id) === stamp) continue;
-            this._lastAlarmStamps.set(alarm.id, stamp);
-
-            if (hasDate) this._disableOneTimeAlarm(alarm);
-
-            if (this._isAlarming) {
-                if (!this._pendingAlarms.some(pending => pending.id === alarm.id))
-                    this._pendingAlarms.push(alarm);
-            } else {
-                this._triggerAlarm(alarm);
-            }
-        }
-    }
-
-    _playAlarmSound(cancellable = this._alarmSoundCancellable) {
-        try {
-            global.display.get_sound_player().play_from_theme('alarm-clock-elapsed', 'Alarm clock', cancellable);
-        } catch (e) {
-            console.error('RelojLCD: Failed to play alarm sound', e);
-        }
-    }
-
-    _startTestSound() {
-        this._stopTestSound();
-        this._testSoundCancellable = new Gio.Cancellable();
-        this._playAlarmSound(this._testSoundCancellable);
-    }
-
-    _stopTestSound() {
-        if (this._testSoundCancellable) {
-            this._testSoundCancellable.cancel();
-            this._testSoundCancellable = null;
-        }
-    }
-
-    _triggerAlarm(alarm) {
-        this._isAlarming = true;
-        this._alarmSoundCancellable = new Gio.Cancellable();
-
-        if (this._settings.get_boolean('alarm-dialog-enabled')) {
-            this._showAlarmDialog(alarm);
-        } else {
-            this._showAlarmNotification(alarm);
-        }
-        this._playAlarmSound();
-
-        if (this._alarmSoundTimeoutId) GLib.Source.remove(this._alarmSoundTimeoutId);
-        this._alarmSoundTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 8130, () => {
-            this._playAlarmSound();
-            return GLib.SOURCE_CONTINUE;
-        });
-
-        if (this._blinkTimeoutId) GLib.Source.remove(this._blinkTimeoutId);
-        this._blinkTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
-            this._alarmBlinkState = !this._alarmBlinkState;
-            const opacity = this._alarmBlinkState ? 255 : 40;
-            this._clockLabel.set_opacity(opacity);
-            this._alarmDotWrapper.set_opacity(opacity);
-            return GLib.SOURCE_CONTINUE;
-        });
-
-        if (this._alarmTimeoutId) GLib.Source.remove(this._alarmTimeoutId);
-        this._alarmTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 60000, () => {
-            this._stopAlarm();
-            return GLib.SOURCE_REMOVE;
-        });
-    }
-
-    _showAlarmNotification(alarm) {
-        const source = MessageTray.getSystemSource();
-        const notification = new MessageTray.Notification({
-            source,
-            title: _('Reloj LCD'),
-            body: alarm.label || _('Alarm'),
-            urgency: MessageTray.Urgency.CRITICAL
-        });
-
-        notification.addAction(_('Snooze'), () => this._snoozeAlarm(alarm));
-        notification.addAction(_('Dismiss'), () => this._stopAlarm());
-
-        const destroyHandlerId = notification.connect('destroy', () => {
-            notification.disconnect(destroyHandlerId);
-            if (this._activeNotification === notification)
-                this._activeNotification = null;
-        });
-
-        this._activeNotification = notification;
-        source.addNotification(notification);
-    }
-
-    _showAlarmDialog(alarm) {
-        this._alarmDialog = new AlarmDialog(
-            alarm,
-            () => this._snoozeAlarm(alarm),
-            () => this._stopAlarm()
-        );
-        this._alarmDialog.open();
-    }
-
-    _snoozeAlarm(alarm) {
-        this._stopAlarm();
-
-        const existingTimeoutId = this._snoozeTimeoutIds.get(alarm.id);
-        if (existingTimeoutId) GLib.Source.remove(existingTimeoutId);
-
-        const snoozeMinutes = this._settings.get_int('snooze-minutes');
-        const timeoutId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, snoozeMinutes * 60, () => {
-            this._snoozeTimeoutIds.delete(alarm.id);
-            this._triggerAlarm(alarm);
-            return GLib.SOURCE_REMOVE;
-        });
-        this._snoozeTimeoutIds.set(alarm.id, timeoutId);
-    }
-
-    _stopAlarm(triggerPending = true) {
-        this._isAlarming = false;
-
-        if (this._alarmSoundCancellable) {
-            this._alarmSoundCancellable.cancel();
-            this._alarmSoundCancellable = null;
+    _onAlarmRingingChanged(isRinging) {
+        if (isRinging) {
+            this._startAlarmBlink();
+            return;
         }
 
-        if (this._alarmSoundTimeoutId) {
-            GLib.Source.remove(this._alarmSoundTimeoutId);
-            this._alarmSoundTimeoutId = null;
-        }
-
-        if (this._alarmTimeoutId) {
-            GLib.Source.remove(this._alarmTimeoutId);
-            this._alarmTimeoutId = null;
-        }
-
-        if (this._blinkTimeoutId) {
-            GLib.Source.remove(this._blinkTimeoutId);
-            this._blinkTimeoutId = null;
-        }
-
-        this._activeNotification?.destroy();
-        this._activeNotification = null;
-
-        if (this._alarmDialog) {
-            this._alarmDialog.close();
-            this._alarmDialog = null;
-        }
+        this._stopAlarmBlink();
 
         if (this._clockLabel) {
             this._clockLabel.set_opacity(255);
-            this._invalidateStyleCache();
             this._updateStyle();
         }
         if (this._alarmDotWrapper) {
             this._alarmDotWrapper.set_opacity(255);
         }
         this._updateFlicker();
+    }
 
-        if (triggerPending && this._pendingAlarms.length) {
-            const nextAlarm = this._pendingAlarms.shift();
-            this._triggerAlarm(nextAlarm);
+    _startAlarmBlink() {
+        this._stopAlarmBlink();
+        this._blinkTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, ALARM_BLINK_INTERVAL_MS, () => {
+            this._alarmBlinkState = !this._alarmBlinkState;
+            const opacity = this._alarmBlinkState ? 255 : ALARM_BLINK_DIM_OPACITY;
+            this._clockLabel.set_opacity(opacity);
+            this._alarmDotWrapper.set_opacity(opacity);
+            return GLib.SOURCE_CONTINUE;
+        });
+    }
+
+    _stopAlarmBlink() {
+        if (this._blinkTimeoutId) {
+            GLib.Source.remove(this._blinkTimeoutId);
+            this._blinkTimeoutId = null;
         }
     }
 
@@ -1276,14 +1094,12 @@ export default class RelojLCDExtension extends Extension {
         this._applyContainerOrientation(config);
         this._updateShadowLabelVisibility(config);
         const containerStyle = this._buildContainerStyle(config, theme);
-        const clockStyle = this._buildClockStyle(config, theme);
 
         this._updateGhostLabel(config, theme);
-        this._applyStyles(containerStyle, clockStyle, theme, config);
+        this._applyStyles(containerStyle, theme, config);
         this._updateHorizontalCentering();
     }
 
-    // Vertical layout: bell sits above the clock instead of beside it.
     _applyContainerOrientation(config) {
         if (this._container) {
             this._container.orientation = config.compact ? Clutter.Orientation.VERTICAL : Clutter.Orientation.HORIZONTAL;
@@ -1298,7 +1114,7 @@ export default class RelojLCDExtension extends Extension {
 
         if (!this._skipInitialRedraw) {
             this._ghostLabel.setText(
-                this._getPlaceholderText(config.showSeconds, config.showDate, config.isWidget, config.compact),
+                this._getPlaceholderText(config.showSeconds, config.showDate, config.isWidget, config.is24h, config.compact),
                 theme.main,
                 config.fontSize,
                 resolveGlyphStyleOptions(config.fontStyle));
@@ -1322,6 +1138,7 @@ export default class RelojLCDExtension extends Extension {
             showSeconds: showSeconds,
             showDate: showDate,
             isWidget: isWidget,
+            is24h: this._settings.get_boolean('clock-format-24h'),
             compact: compact,
             fontStyle: this._settings.get_string('font-style'),
             showFrame: this._settings.get_boolean('show-frame'),
@@ -1359,7 +1176,7 @@ export default class RelojLCDExtension extends Extension {
             this._applyShadowLabelTranslation();
             if (!this._skipInitialRedraw) {
                 this._shadowLabel.setText(
-                    this._getPlaceholderText(config.showSeconds, config.showDate, config.isWidget, config.compact),
+                    this._getPlaceholderText(config.showSeconds, config.showDate, config.isWidget, config.is24h, config.compact),
                     RETRO_SHADOW_RGBA,
                     config.fontSize,
                     resolveGlyphStyleOptions(config.fontStyle));
@@ -1376,61 +1193,18 @@ export default class RelojLCDExtension extends Extension {
             `background-color: ${theme.bg}`,
             `border-radius: 8px`,
             `box-shadow: ${this._calculateBoxShadow(config.colorType, config.glow, theme)}`,
-            `padding: 2px ${config.horizontalPadding.toFixed(1)}px`,
-            `position: relative`,
-            `z-index: 10`
+            `padding: 2px ${config.horizontalPadding.toFixed(1)}px`
         ];
 
-        if (config.showFrame) {
+        if (config.showFrame)
             props.push(`border: 1px solid ${theme.border}`);
-        }
 
-        if (config.showDate) {
-            props.push(`text-align: center`);
-            if (config.isWidget) {
-                props.push(`line-height: 1.2`);
-            }
-        }
-        
         return props.join('; ') + ';';
-    }
-
-    _buildClockStyle(config, theme) {
-        const baseProps = this._buildBaseStyleProps(config);
-        const props = [...baseProps];
-        props.push(`color: ${theme.main}`);
-        props.push(`text-shadow: 0.5px 0 0 rgba(0, 0, 0, 0.05)`);
-        props.push(`-st-text-shadow: 0.5px 0 0 rgba(0, 0, 0, 0.05)`);
-        props.push(`z-index: 2`);
-        return props.join('; ') + ';';
-    }
-
-    _buildBaseStyleProps(config) {
-        let fontWeight = 'normal';
-        let cssFontStyle = 'normal';
-        
-        if (config.fontStyle === 'italic') {
-            cssFontStyle = 'italic';
-        } else if (config.fontStyle === 'bold') {
-            fontWeight = 'bold';
-        } else if (config.fontStyle === 'italic-bold') {
-            cssFontStyle = 'italic';
-            fontWeight = 'bold';
-        }
-        
-        return [
-            `font-size: ${config.fontSize.toFixed(1)}em`,
-            `font-weight: ${fontWeight}`,
-            `font-style: ${cssFontStyle}`,
-            `overflow: visible`,
-            `-st-font-smoothing: enabled`,
-            `-st-text-rendering: optimizeSpeed`
-        ];
     }
 
     _calculateBoxShadow(colorType, glow, theme) {
         if (colorType === 'gray' || glow <= 0) return 'none';
-        
+
         const glowIntensity = glow / 10;
         const withAlpha = (rgba, alpha) => rgba.replace(/[\d.]+\)$/, `${alpha})`);
         const boxGlowColor = withAlpha(theme.glow, 0.1 + glowIntensity * 0.5);
@@ -1438,27 +1212,11 @@ export default class RelojLCDExtension extends Extension {
         return `0 0 ${blurSize.toFixed(1)}px ${boxGlowColor}`;
     }
 
-    _applyStyles(containerStyle, clockStyle, theme, config) {
-        if (this._lastAppliedStyle === clockStyle &&
-            this._lastAppliedContainerStyle === containerStyle) {
-            return;
-        }
-
-        this._lastAppliedStyle = clockStyle;
-        this._lastAppliedContainerStyle = containerStyle;
-
+    _applyStyles(containerStyle, theme, config) {
         if (this._container) this._container.set_style(containerStyle);
-        this._clockLabel.set_style(clockStyle);
-        if (!this._skipInitialRedraw) {
-            this._clockLabel.queue_redraw();
-            if (this._clockContainer) this._clockContainer.queue_redraw();
-            if (this._container) this._container.queue_redraw();
-            if (this._indicator) this._indicator.queue_redraw();
-        }
-        
-        if (this._alarmDot && this._alarmDotWrapper) {
+
+        if (this._alarmDot && this._alarmDotWrapper)
             this._updateAlarmDotAppearance(config, theme);
-        }
     }
 
     _updateAlarmDotAppearance(config, theme) {
@@ -1469,16 +1227,14 @@ export default class RelojLCDExtension extends Extension {
         const shadowOffset = showGhostShadow ? calculateRetroShadowOffset(config.glow, config.fontSize) : 0;
 
         const glyphOptions = resolveGlyphStyleOptions(config.fontStyle);
-        // Bold keeps the bell legible at small sizes.
         const iconOptions = { ...glyphOptions, bold: true };
 
         const iconAspect = getGlyphAspectRatio('alarm', glyphOptions.italic);
         const iconHeight = Math.max(1, Math.round(slotHeight));
         const iconWidth = Math.max(1, Math.round(slotHeight * iconAspect));
 
-        // Rasterize above the actor's on-screen size and let the GPU downscale it.
-        const rasterWidth = Math.max(iconWidth, ALARM_ICON_MIN_RASTER_SIZE * iconAspect);
-        const rasterHeight = Math.max(iconHeight, ALARM_ICON_MIN_RASTER_SIZE);
+        const rasterWidth = Math.max(iconWidth * this._rasterScale, ALARM_ICON_MIN_RASTER_SIZE * iconAspect);
+        const rasterHeight = Math.max(iconHeight * this._rasterScale, ALARM_ICON_MIN_RASTER_SIZE);
 
         this._alarmDotWrapper.set_size(Math.max(1, Math.round(slotWidth)), Math.max(1, Math.round(slotHeight)));
         const marginSide = config.compact ? 'margin-bottom' : 'margin-right';
@@ -1499,10 +1255,11 @@ export default class RelojLCDExtension extends Extension {
         }
     }
 
-    _getPlaceholderText(showSeconds, showDate, isWidget, compact = false) {
+    _getPlaceholderText(showSeconds, showDate, isWidget, is24h, compact = false) {
         if (compact) return '88\n88';
 
         let timeText = showSeconds ? '88 : 88 : 88' : '88 : 88';
+        if (!is24h) timeText += ' 88';
         if (showDate) {
             if (isWidget) {
                 timeText += '\n88-88-8888';

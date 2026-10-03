@@ -7,6 +7,7 @@ import Gdk from 'gi://Gdk';
 import GdkPixbuf from 'gi://GdkPixbuf';
 import { isValidHex, hexToRgba, PRESET_COLORS } from './colorUtils.js';
 import { calculateRetroShadowOffset, RETRO_SHADOW_RGBA } from './renderMath.js';
+import { ALARM_SOUND_DURATION_MS } from './alarmSound.js';
 import {
     buildGlyphSvgMarkup,
     resolveGlyphStyleOptions,
@@ -19,11 +20,22 @@ import {
 const PREVIEW_MAX_FONT_SIZE = 4;
 const PREVIEW_TEXT = '88:88';
 const PREVIEW_ALARM_SLOT_RATIO = 0.15;
+const TEST_SOUND_END_MARGIN_MS = 70;
 const glyphTextEncoder = new TextEncoder();
+
+const RESET_EXCLUDED_KEYS = new Set([
+    'alarms', 'alarms-migrated', 'alarm-enabled', 'alarm-hour', 'alarm-minute',
+    'alarm-message', 'widget-x', 'widget-y', 'last-version',
+    'test-alarm-counter', 'test-alarm-stop-counter'
+]);
 
 const RETRO_MAIN_COLOR = '#000000';
 const RETRO_BORDER_COLOR = '#6a8a5a';
 const RETRO_BG_COLOR = 'rgba(120, 150, 100, 0.95)';
+
+function escapeMarkup(text) {
+    return GLib.markup_escape_text(text, -1);
+}
 
 function hexTo01(hex) {
     const clean = hex.replace('#', '');
@@ -91,8 +103,6 @@ function drawPreviewChrome(cr, width, height, colors, glowValue, isRetro, showFr
     }
 }
 
-// GTK-side counterpart of GlyphTextureCache; St/Cogl don't exist outside
-// the Shell process.
 function rasterizeGlyph(cache, char, color, pixelWidth, pixelHeight, options) {
     const width = Math.max(1, Math.round(pixelWidth));
     const height = Math.max(1, Math.round(pixelHeight));
@@ -111,15 +121,17 @@ function rasterizeGlyph(cache, char, color, pixelWidth, pixelHeight, options) {
     return pixbuf;
 }
 
-function drawGlyph(cr, cache, char, color, fontSize, styleOptions, x, centerY) {
+function drawGlyph(cr, cache, char, color, fontSize, styleOptions, x, centerY, scale = 1) {
     const cellHeight = calculateCellPixelHeight(fontSize);
     const cellWidth = calculateCellPixelWidth(fontSize, char, styleOptions.italic);
 
     if (!isBlankGlyph(char)) {
-        const pixbuf = rasterizeGlyph(cache, char, color, cellWidth, cellHeight, styleOptions);
+        const pixbuf = rasterizeGlyph(cache, char, color, cellWidth * scale, cellHeight * scale, styleOptions);
         if (pixbuf) {
             cr.save();
             cr.translate(x, centerY - cellHeight / 2);
+            if (scale > 1)
+                cr.scale(cellWidth / pixbuf.get_width(), cellHeight / pixbuf.get_height());
             Gdk.cairo_set_source_pixbuf(cr, pixbuf, 0, 0);
             cr.paint();
             cr.restore();
@@ -129,15 +141,14 @@ function drawGlyph(cr, cache, char, color, fontSize, styleOptions, x, centerY) {
     return cellWidth;
 }
 
-// Multi-character text only; single keys like 'alarm' go through drawGlyph().
-function drawGlyphRow(cr, cache, text, color, fontSize, styleOptions, startX, centerY) {
+function drawGlyphRow(cr, cache, text, color, fontSize, styleOptions, startX, centerY, scale = 1) {
     let x = startX;
     for (const char of text)
-        x += drawGlyph(cr, cache, char, color, fontSize, styleOptions, x, centerY);
+        x += drawGlyph(cr, cache, char, color, fontSize, styleOptions, x, centerY, scale);
     return x - startX;
 }
 
-function drawAlarmIcon(cr, cache, slotX, centerY, slotWidth, fontSize, colors, glowValue, isRetro, styleOptions) {
+function drawAlarmIcon(cr, cache, slotX, centerY, slotWidth, fontSize, colors, glowValue, isRetro, styleOptions, scale = 1) {
     const iconOptions = { ...styleOptions, bold: true };
     const iconWidth = calculateCellPixelWidth(fontSize, 'alarm');
     const iconX = slotX + (slotWidth - iconWidth) / 2;
@@ -145,10 +156,10 @@ function drawAlarmIcon(cr, cache, slotX, centerY, slotWidth, fontSize, colors, g
     if (isRetro && glowValue >= 1) {
         const shadowOffset = calculateRetroShadowOffset(glowValue, fontSize);
         drawGlyph(cr, cache, 'alarm', RETRO_SHADOW_RGBA, fontSize, iconOptions,
-            iconX + shadowOffset, centerY + shadowOffset);
+            iconX + shadowOffset, centerY + shadowOffset, scale);
     }
 
-    drawGlyph(cr, cache, 'alarm', colors.main, fontSize, iconOptions, iconX, centerY);
+    drawGlyph(cr, cache, 'alarm', colors.main, fontSize, iconOptions, iconX, centerY, scale);
 }
 
 function parseAlarms(raw) {
@@ -198,98 +209,70 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
         });
         dateGroup.add(dateLabel);
 
+        const positionKeys = ['left', 'center', 'right'];
+        const colorKeys = ['green', 'amber', 'gray', 'ruby', 'sapphire', 'white', 'violet', 'gold', 'teal', 'orange', 'custom'];
+        const fontStyleKeys = ['regular', 'italic', 'bold', 'italic-bold'];
+        const syncHandlerIds = [];
+
+        const addSwitchRow = (group, key, title, subtitle) => {
+            const row = new Adw.SwitchRow({ title, subtitle });
+            settings.bind(key, row, 'active', Gio.SettingsBindFlags.DEFAULT);
+            group.add(row);
+            return row;
+        };
+
+        const bindChoiceRow = (row, key, choices) => {
+            row.set_selected(Math.max(0, choices.indexOf(settings.get_string(key))));
+            row.connect('notify::selected', (w) => {
+                settings.set_string(key, choices[w.selected]);
+            });
+            syncHandlerIds.push(settings.connect(`changed::${key}`, () => {
+                const index = choices.indexOf(settings.get_string(key));
+                if (index >= 0 && row.selected !== index)
+                    row.set_selected(index);
+            }));
+        };
+
         const behaviorGroup = new Adw.PreferencesGroup({
             title: _('Clock Behavior'),
             description: _('Choose what the clock shows and where it lives')
         });
         generalPage.add(behaviorGroup);
 
-        const widgetRow = new Adw.ActionRow({
-            title: _('Desktop Widget Mode'),
-            subtitle: _('Show clock on desktop instead of the top bar')
-        });
-        const widgetSwitch = new Gtk.Switch({
-            active: settings.get_boolean('is-widget'),
-            valign: Gtk.Align.CENTER
-        });
+        addSwitchRow(behaviorGroup, 'is-widget',
+            _('Desktop Widget Mode'),
+            _('Show clock on desktop instead of the top bar'));
+        const verticalLayoutRow = addSwitchRow(behaviorGroup, 'vertical-panel-layout',
+            _('Vertical Panel Layout'),
+            _('Compact layout (bell, hours, minutes stacked, no seconds or date) for a panel docked to the left or right edge of the screen. Not used in desktop widget mode.'));
+        settings.bind('is-widget', verticalLayoutRow, 'sensitive',
+            Gio.SettingsBindFlags.GET | Gio.SettingsBindFlags.INVERT_BOOLEAN);
+        addSwitchRow(behaviorGroup, 'clock-format-24h',
+            _('24-Hour Format'),
+            _('Display time in 24-hour format instead of AM/PM'));
+        addSwitchRow(behaviorGroup, 'show-seconds',
+            _('Show Seconds'),
+            _('Display seconds in the time display'));
+        addSwitchRow(behaviorGroup, 'show-date',
+            _('Show Date'),
+            _('Display current date below the time'));
 
-        const verticalLayoutRow = new Adw.ActionRow({
-            title: _('Vertical Panel Layout'),
-            subtitle: _('Compact layout (bell, hours, minutes stacked, no seconds or date) for a panel docked to the left or right edge of the screen. Not used in desktop widget mode.')
+        const dateOrderRow = new Adw.ComboRow({
+            title: _('Date Order'),
+            subtitle: _('Order of day, month and year when the date is shown'),
+            model: new Gtk.StringList({ strings: [_('DD-MM-YYYY'), _('MM-DD-YYYY'), _('YYYY-MM-DD')] })
         });
-        const verticalLayoutSwitch = new Gtk.Switch({
-            active: settings.get_boolean('vertical-panel-layout'),
-            sensitive: !settings.get_boolean('is-widget'),
-            valign: Gtk.Align.CENTER
-        });
-        verticalLayoutSwitch.connect('notify::active', (w) => {
-            settings.set_boolean('vertical-panel-layout', w.active);
-        });
-        verticalLayoutRow.add_suffix(verticalLayoutSwitch);
-
-        widgetSwitch.connect('notify::active', (w) => {
-            settings.set_boolean('is-widget', w.active);
-            verticalLayoutSwitch.set_sensitive(!w.active);
-        });
-        widgetRow.add_suffix(widgetSwitch);
-        behaviorGroup.add(widgetRow);
-        behaviorGroup.add(verticalLayoutRow);
-
-        const formatRow = new Adw.ActionRow({
-            title: _('24-Hour Format'),
-            subtitle: _('Display time in 24-hour format instead of AM/PM')
-        });
-        const formatSwitch = new Gtk.Switch({
-            active: settings.get_boolean('clock-format-24h'),
-            valign: Gtk.Align.CENTER
-        });
-        formatSwitch.connect('notify::active', (w) => {
-            settings.set_boolean('clock-format-24h', w.active);
-        });
-        formatRow.add_suffix(formatSwitch);
-        behaviorGroup.add(formatRow);
-
-        const secondsRow = new Adw.ActionRow({
-            title: _('Show Seconds'),
-            subtitle: _('Display seconds in the time display')
-        });
-        const secondsSwitch = new Gtk.Switch({
-            active: settings.get_boolean('show-seconds'),
-            valign: Gtk.Align.CENTER
-        });
-        secondsSwitch.connect('notify::active', (w) => {
-            settings.set_boolean('show-seconds', w.active);
-        });
-        secondsRow.add_suffix(secondsSwitch);
-        behaviorGroup.add(secondsRow);
-
-        const dateRow = new Adw.ActionRow({
-            title: _('Show Date'),
-            subtitle: _('Display current date below the time')
-        });
-        const dateSwitch = new Gtk.Switch({
-            active: settings.get_boolean('show-date'),
-            valign: Gtk.Align.CENTER
-        });
-        dateSwitch.connect('notify::active', (w) => {
-            settings.set_boolean('show-date', w.active);
-        });
-        dateRow.add_suffix(dateSwitch);
-        behaviorGroup.add(dateRow);
+        bindChoiceRow(dateOrderRow, 'date-format', ['dmy', 'mdy', 'ymd']);
+        settings.bind('show-date', dateOrderRow, 'sensitive', Gio.SettingsBindFlags.GET);
+        behaviorGroup.add(dateOrderRow);
 
         const positionRow = new Adw.ComboRow({
             title: _('Panel Position'),
             subtitle: _('Choose where the clock appears on the panel'),
-            model: new Gtk.StringList({ strings: [_('Left'), _('Center'), _('Right')] }),
-            selected: ['left', 'center', 'right'].indexOf(settings.get_string('panel-position'))
+            model: new Gtk.StringList({ strings: [_('Left'), _('Center'), _('Right')] })
         });
-        positionRow.connect('notify::selected', (w) => {
-            const positions = ['left', 'center', 'right'];
-            settings.set_string('panel-position', positions[w.selected]);
-        });
+        bindChoiceRow(positionRow, 'panel-position', positionKeys);
         behaviorGroup.add(positionRow);
-
-        const colorKeys = ['green', 'amber', 'gray', 'ruby', 'sapphire', 'white', 'violet', 'gold', 'teal', 'orange', 'custom'];
 
         const previewArea = new Gtk.DrawingArea({
             content_width: 260,
@@ -320,6 +303,7 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
             const isRetro = colorType === 'gray';
             const showFrame = settings.get_boolean('show-frame');
             const layout = computePreviewLayout();
+            const scale = settings.get_boolean('sharp-digits') ? Math.max(1, area.get_scale_factor()) : 1;
 
             drawPreviewChrome(cr, width, height, colors, glowValue, isRetro, showFrame);
 
@@ -328,18 +312,18 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
 
             if (layout.hasEnabledAlarm) {
                 drawAlarmIcon(cr, glyphPreviewCache, x, centerY, layout.alarmSlotWidth, layout.fontSize,
-                    colors, glowValue, isRetro, layout.styleOptions);
+                    colors, glowValue, isRetro, layout.styleOptions, scale);
                 x += layout.alarmSlotWidth + layout.alarmMargin;
             }
 
             if (isRetro && glowValue >= 1) {
                 const shadowOffset = calculateRetroShadowOffset(glowValue, layout.fontSize);
                 drawGlyphRow(cr, glyphPreviewCache, PREVIEW_TEXT, RETRO_SHADOW_RGBA, layout.fontSize,
-                    layout.styleOptions, x + shadowOffset, centerY + shadowOffset);
+                    layout.styleOptions, x + shadowOffset, centerY + shadowOffset, scale);
             }
 
             drawGlyphRow(cr, glyphPreviewCache, PREVIEW_TEXT, colors.main, layout.fontSize,
-                layout.styleOptions, x, centerY);
+                layout.styleOptions, x, centerY, scale);
         });
 
         const refreshPreview = () => {
@@ -355,7 +339,7 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
         appearancePage.add(previewGroup);
 
         const colorGroup = new Adw.PreferencesGroup({
-            title: _('Color & Glow'),
+            title: escapeMarkup(_('Color & Glow')),
             description: _('Pick a theme and tune how it glows')
         });
         appearancePage.add(colorGroup);
@@ -363,43 +347,41 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
         const colorRow = new Adw.ComboRow({
             title: _('Color Theme'),
             subtitle: _('Choose your preferred LCD color style'),
-            model: new Gtk.StringList({ strings: [_('Neon Green'), _('Vintage Amber'), _('Retro LCD'), _('Red Ruby'), _('Blue Sapphire'), _('White LED'), _('Violet Purple'), _('Gold'), _('VFD Teal'), _('Nixie Orange'), _('Custom Color')] }),
-            selected: colorKeys.indexOf(settings.get_string('clock-color'))
+            model: new Gtk.StringList({ strings: [_('Neon Green'), _('Vintage Amber'), _('Retro LCD'), _('Red Ruby'), _('Blue Sapphire'), _('White LED'), _('Violet Purple'), _('Gold'), _('VFD Teal'), _('Nixie Orange'), _('Custom Color')] })
         });
+        bindChoiceRow(colorRow, 'clock-color', colorKeys);
         colorGroup.add(colorRow);
+
+        const readCustomColor = () => {
+            const rgba = new Gdk.RGBA();
+            rgba.parse(isValidHex(settings.get_string('custom-color')) ? settings.get_string('custom-color') : '#00ff00');
+            return rgba;
+        };
 
         const customColorRow = new Adw.ActionRow({
             title: _('Custom Color'),
-            subtitle: _('Applies to digits, separators, alarm dot and border')
+            subtitle: _('Applies to digits, separators, alarm bell and border')
         });
-        const initialRgba = new Gdk.RGBA();
-        initialRgba.parse(isValidHex(settings.get_string('custom-color')) ? settings.get_string('custom-color') : '#00ff00');
-        const colorButton = new Gtk.ColorButton({
-            rgba: initialRgba,
-            use_alpha: false,
+        const colorButton = new Gtk.ColorDialogButton({
+            dialog: new Gtk.ColorDialog({ with_alpha: false }),
+            rgba: readCustomColor(),
             valign: Gtk.Align.CENTER
         });
-        colorButton.connect('color-set', (w) => {
+        colorButton.connect('notify::rgba', (w) => {
             const rgba = w.get_rgba();
             const hex = '#' + [rgba.red, rgba.green, rgba.blue]
                 .map(v => Math.round(v * 255).toString(16).padStart(2, '0'))
                 .join('');
-            settings.set_string('custom-color', hex);
-            refreshPreview();
+            if (hex !== settings.get_string('custom-color'))
+                settings.set_string('custom-color', hex);
         });
+        syncHandlerIds.push(settings.connect('changed::custom-color', () => {
+            colorButton.set_rgba(readCustomColor());
+        }));
         customColorRow.add_suffix(colorButton);
-        customColorRow.set_visible(settings.get_string('clock-color') === 'custom');
         colorGroup.add(customColorRow);
 
-        colorRow.connect('notify::selected', (w) => {
-            const color = colorKeys[w.selected];
-            settings.set_string('clock-color', color);
-            customColorRow.set_visible(color === 'custom');
-            updateGlowLimit(color);
-            refreshPreview();
-        });
-
-        const glowAdjustment = new Gtk.Adjustment({ lower: 0, upper: 10, step_increment: 1, value: settings.get_double('glow-intensity') });
+        const glowAdjustment = new Gtk.Adjustment({ lower: 0, upper: 10, step_increment: 1 });
         const glowRow = new Adw.ActionRow({
             title: _('Glow / Shadow Intensity'),
             subtitle: _('Control glow for colored themes or shadow strength for Retro LCD')
@@ -409,43 +391,28 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
             digits: 0,
             valign: Gtk.Align.CENTER
         });
-
-        const updateGlowLimit = (color) => {
-            const isRetro = color === 'gray';
-            glowAdjustment.set_upper(isRetro ? 5 : 10);
-            if (isRetro && glowAdjustment.get_value() > 5) {
-                glowAdjustment.set_value(5);
-                settings.set_double('glow-intensity', 5);
-            }
-        };
-
-        updateGlowLimit(settings.get_string('clock-color'));
-
-        glowSpin.connect('value-changed', (w) => {
-            const intensity = Math.floor(w.get_value());
-            settings.set_double('glow-intensity', intensity);
-            refreshPreview();
-        });
+        settings.bind('glow-intensity', glowSpin, 'value', Gio.SettingsBindFlags.DEFAULT);
         glowRow.add_suffix(glowSpin);
         colorGroup.add(glowRow);
 
-        const frameRow = new Adw.ActionRow({
-            title: _('Display Border'),
-            subtitle: _('Hide the border outline around the display; the background and glow stay visible')
-        });
-        const frameSwitch = new Gtk.Switch({
-            active: settings.get_boolean('show-frame'),
-            valign: Gtk.Align.CENTER
-        });
-        frameSwitch.connect('notify::active', (w) => {
-            settings.set_boolean('show-frame', w.active);
-            refreshPreview();
-        });
-        frameRow.add_suffix(frameSwitch);
-        colorGroup.add(frameRow);
+        const syncColorDependents = () => {
+            const color = settings.get_string('clock-color');
+            customColorRow.set_visible(color === 'custom');
+
+            const glowLimit = color === 'gray' ? 5 : 10;
+            glowAdjustment.set_upper(glowLimit);
+            if (settings.get_double('glow-intensity') > glowLimit)
+                settings.set_double('glow-intensity', glowLimit);
+        };
+        syncColorDependents();
+        syncHandlerIds.push(settings.connect('changed::clock-color', syncColorDependents));
+
+        addSwitchRow(colorGroup, 'show-frame',
+            _('Display Border'),
+            _('Hide the border outline around the display; the background and glow stay visible'));
 
         const textGroup = new Adw.PreferencesGroup({
-            title: _('Font & Effects'),
+            title: escapeMarkup(_('Font & Effects')),
             description: _('Adjust size, style and vintage display effects')
         });
         appearancePage.add(textGroup);
@@ -459,111 +426,48 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
             digits: 1,
             valign: Gtk.Align.CENTER
         });
-        fontSpin.connect('value-changed', (w) => {
-            const size = Math.round(w.get_value() * 10) / 10;
-            settings.set_double('font-size', size);
-            refreshPreview();
+        fontSpin.connect('notify::value', (w) => {
+            const size = Math.round(w.value * 10) / 10;
+            if (size !== settings.get_double('font-size'))
+                settings.set_double('font-size', size);
         });
+        syncHandlerIds.push(settings.connect('changed::font-size', () => {
+            const size = settings.get_double('font-size');
+            if (Math.abs(fontSpin.value - size) > 1e-6)
+                fontSpin.set_value(size);
+        }));
         fontRow.add_suffix(fontSpin);
         textGroup.add(fontRow);
 
-        const fontStyleKeys = ['regular', 'italic', 'bold', 'italic-bold'];
         const fontStyleRow = new Adw.ComboRow({
             title: _('Font Style'),
             subtitle: _('Choose the font style (synthetic bold/italic)'),
-            model: new Gtk.StringList({ strings: [_('Regular'), _('Italic'), _('Bold'), _('Italic Bold')] }),
-            selected: fontStyleKeys.indexOf(settings.get_string('font-style'))
+            model: new Gtk.StringList({ strings: [_('Regular'), _('Italic'), _('Bold'), _('Italic Bold')] })
         });
-        fontStyleRow.connect('notify::selected', (w) => {
-            const style = fontStyleKeys[w.selected];
-            settings.set_string('font-style', style);
-            refreshPreview();
-        });
+        bindChoiceRow(fontStyleRow, 'font-style', fontStyleKeys);
         textGroup.add(fontStyleRow);
 
-        const blinkRow = new Adw.ActionRow({
-            title: _('Blinking Separators'),
-            subtitle: _('Make the time separators blink for classic LCD effect')
-        });
-        const blinkSwitch = new Gtk.Switch({
-            active: settings.get_boolean('blink-dots'),
-            valign: Gtk.Align.CENTER
-        });
-        blinkSwitch.connect('notify::active', (w) => {
-            settings.set_boolean('blink-dots', w.active);
-        });
-        blinkRow.add_suffix(blinkSwitch);
-        textGroup.add(blinkRow);
-
-        const flickerRow = new Adw.ActionRow({
-            title: _('Flicker Effect'),
-            subtitle: _('Add subtle random flicker for vintage LCD display feel')
-        });
-        const flickerSwitch = new Gtk.Switch({
-            active: settings.get_boolean('flicker-enabled'),
-            valign: Gtk.Align.CENTER
-        });
-        flickerSwitch.connect('notify::active', (w) => {
-            settings.set_boolean('flicker-enabled', w.active);
-        });
-        flickerRow.add_suffix(flickerSwitch);
-        textGroup.add(flickerRow);
-
-        const ghostRow = new Adw.ActionRow({
-            title: _('Ghost Segments'),
-            subtitle: _('Show the unlit 7-segment pattern faintly behind the digits')
-        });
-        const ghostSwitch = new Gtk.Switch({
-            active: settings.get_boolean('ghost-segments'),
-            valign: Gtk.Align.CENTER
-        });
-        ghostSwitch.connect('notify::active', (w) => {
-            settings.set_boolean('ghost-segments', w.active);
-        });
-        ghostRow.add_suffix(ghostSwitch);
-        textGroup.add(ghostRow);
-
-        const lampTestRow = new Adw.ActionRow({
-            title: _('Lamp Test on Startup'),
-            subtitle: _('Briefly flash all segments when the extension starts')
-        });
-        const lampTestSwitch = new Gtk.Switch({
-            active: settings.get_boolean('startup-lamp-test'),
-            valign: Gtk.Align.CENTER
-        });
-        lampTestSwitch.connect('notify::active', (w) => {
-            settings.set_boolean('startup-lamp-test', w.active);
-        });
-        lampTestRow.add_suffix(lampTestSwitch);
-        textGroup.add(lampTestRow);
-
-        const minuteFlickerRow = new Adw.ActionRow({
-            title: _('Minute Flicker'),
-            subtitle: _('Dip the brightness briefly whenever the minute changes')
-        });
-        const minuteFlickerSwitch = new Gtk.Switch({
-            active: settings.get_boolean('minute-flicker'),
-            valign: Gtk.Align.CENTER
-        });
-        minuteFlickerSwitch.connect('notify::active', (w) => {
-            settings.set_boolean('minute-flicker', w.active);
-        });
-        minuteFlickerRow.add_suffix(minuteFlickerSwitch);
-        textGroup.add(minuteFlickerRow);
-
-        const scanlinesRow = new Adw.ActionRow({
-            title: _('CRT Scanlines'),
-            subtitle: _('Overlay faint horizontal scanlines for a CRT/VFD look')
-        });
-        const scanlinesSwitch = new Gtk.Switch({
-            active: settings.get_boolean('crt-scanlines'),
-            valign: Gtk.Align.CENTER
-        });
-        scanlinesSwitch.connect('notify::active', (w) => {
-            settings.set_boolean('crt-scanlines', w.active);
-        });
-        scanlinesRow.add_suffix(scanlinesSwitch);
-        textGroup.add(scanlinesRow);
+        addSwitchRow(textGroup, 'sharp-digits',
+            _('Sharp Digits (HiDPI)'),
+            _('Draw the digits at the native screen resolution. Turn off for a softer, retro look on high-resolution screens. No effect on screens without scaling'));
+        addSwitchRow(textGroup, 'blink-dots',
+            _('Blinking Separators'),
+            _('Make the time separators blink for classic LCD effect'));
+        addSwitchRow(textGroup, 'flicker-enabled',
+            _('Flicker Effect'),
+            _('Add subtle random flicker for vintage LCD display feel'));
+        addSwitchRow(textGroup, 'ghost-segments',
+            _('Ghost Segments'),
+            _('Show the unlit 7-segment pattern faintly behind the digits'));
+        addSwitchRow(textGroup, 'startup-lamp-test',
+            _('Lamp Test on Startup'),
+            _('Briefly flash all segments when the extension starts'));
+        addSwitchRow(textGroup, 'minute-flicker',
+            _('Minute Flicker'),
+            _('Dip the brightness briefly whenever the minute changes'));
+        addSwitchRow(textGroup, 'crt-scanlines',
+            _('CRT Scanlines'),
+            _('Overlay faint horizontal scanlines for a CRT/VFD look'));
 
         const alarmGroup = new Adw.PreferencesGroup({
             title: _('Alarms'),
@@ -598,7 +502,7 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
 
         const buildAlarmRow = (alarm) => {
             const row = new Adw.ExpanderRow({
-                title: alarm.label || _('Alarm'),
+                title: escapeMarkup(alarm.label || _('Alarm')),
                 subtitle: formatAlarmSubtitle(alarm)
             });
 
@@ -640,16 +544,12 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
 
             const today = GLib.DateTime.new_now_local();
 
-            const specificDateRow = new Adw.ActionRow({
+            const specificDateSwitch = new Adw.SwitchRow({
                 title: _('Specific Date'),
-                subtitle: _('Ring once on a chosen date instead of every day')
+                subtitle: _('Ring once on a chosen date instead of every day'),
+                active: hasSpecificDate(alarm)
             });
-            const specificDateSwitch = new Gtk.Switch({
-                active: hasSpecificDate(alarm),
-                valign: Gtk.Align.CENTER
-            });
-            specificDateRow.add_suffix(specificDateSwitch);
-            row.add_row(specificDateRow);
+            row.add_row(specificDateSwitch);
 
             const dateRow = new Adw.ActionRow({ title: _('Date') });
             const initialMonth = alarm.month || today.get_month();
@@ -721,7 +621,7 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
             });
             labelRow.connect('changed', (w) => {
                 alarm.label = w.get_text();
-                row.set_title(alarm.label || _('Alarm'));
+                row.set_title(escapeMarkup(alarm.label || _('Alarm')));
                 saveAlarms();
             });
             row.add_row(labelRow);
@@ -758,7 +658,7 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
         alarmGroup.add(addAlarmButtonRow);
 
         const alarmSettingsGroup = new Adw.PreferencesGroup({
-            title: _('Sound & Snooze')
+            title: escapeMarkup(_('Sound & Snooze'))
         });
         alarmsPage.add(alarmSettingsGroup);
 
@@ -790,7 +690,7 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
             } else {
                 settings.set_int('test-alarm-counter', settings.get_int('test-alarm-counter') + 1);
                 setTestSoundPlaying(true);
-                testSoundTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 8200, () => {
+                testSoundTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, ALARM_SOUND_DURATION_MS + TEST_SOUND_END_MARGIN_MS, () => {
                     testSoundTimeoutId = null;
                     setTestSoundPlaying(false);
                     return GLib.SOURCE_REMOVE;
@@ -817,28 +717,17 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
             subtitle: _('Minutes to wait before a snoozed alarm rings again')
         });
         const snoozeSpin = new Gtk.SpinButton({
-            adjustment: new Gtk.Adjustment({ lower: 1, upper: 60, step_increment: 1, value: settings.get_int('snooze-minutes') }),
+            adjustment: new Gtk.Adjustment({ lower: 1, upper: 60, step_increment: 1 }),
+            digits: 0,
             valign: Gtk.Align.CENTER
         });
-        snoozeSpin.connect('value-changed', (w) => {
-            settings.set_int('snooze-minutes', Math.floor(w.get_value()));
-        });
+        settings.bind('snooze-minutes', snoozeSpin, 'value', Gio.SettingsBindFlags.DEFAULT);
         snoozeRow.add_suffix(snoozeSpin);
         alarmSettingsGroup.add(snoozeRow);
 
-        const alarmDialogRow = new Adw.ActionRow({
-            title: _('On-Screen Alarm Dialog'),
-            subtitle: _('Show a dialog instead of a notification when an alarm rings, so it is not missed if notifications are silenced')
-        });
-        const alarmDialogSwitch = new Gtk.Switch({
-            active: settings.get_boolean('alarm-dialog-enabled'),
-            valign: Gtk.Align.CENTER
-        });
-        alarmDialogSwitch.connect('notify::active', (w) => {
-            settings.set_boolean('alarm-dialog-enabled', w.active);
-        });
-        alarmDialogRow.add_suffix(alarmDialogSwitch);
-        alarmSettingsGroup.add(alarmDialogRow);
+        addSwitchRow(alarmSettingsGroup, 'alarm-dialog-enabled',
+            _('On-Screen Alarm Dialog'),
+            _('Show a dialog instead of a notification when an alarm rings, so it is not missed if notifications are silenced'));
 
         const aboutGroup = new Adw.PreferencesGroup({
             title: _('About'),
@@ -913,44 +802,10 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
         });
 
         const resetToDefaults = () => {
-            const keysToReset = [
-                'font-size', 'clock-color', 'custom-color', 'glow-intensity',
-                'clock-format-24h', 'show-seconds', 'show-date', 'panel-position',
-                'is-widget', 'vertical-panel-layout', 'flicker-enabled', 'font-style', 'ghost-segments',
-                'startup-lamp-test', 'minute-flicker', 'crt-scanlines', 'show-frame',
-                'blink-dots', 'snooze-minutes', 'alarm-dialog-enabled'
-            ];
-            for (const key of keysToReset)
-                settings.reset(key);
-
-            widgetSwitch.set_active(settings.get_boolean('is-widget'));
-            verticalLayoutSwitch.set_active(settings.get_boolean('vertical-panel-layout'));
-            formatSwitch.set_active(settings.get_boolean('clock-format-24h'));
-            secondsSwitch.set_active(settings.get_boolean('show-seconds'));
-            dateSwitch.set_active(settings.get_boolean('show-date'));
-            positionRow.set_selected(['left', 'center', 'right'].indexOf(settings.get_string('panel-position')));
-
-            const color = settings.get_string('clock-color');
-            colorRow.set_selected(colorKeys.indexOf(color));
-            customColorRow.set_visible(color === 'custom');
-            const defaultRgba = new Gdk.RGBA();
-            defaultRgba.parse(settings.get_string('custom-color'));
-            colorButton.set_rgba(defaultRgba);
-            updateGlowLimit(color);
-            glowSpin.set_value(settings.get_double('glow-intensity'));
-            frameSwitch.set_active(settings.get_boolean('show-frame'));
-            fontSpin.set_value(settings.get_double('font-size'));
-            fontStyleRow.set_selected(fontStyleKeys.indexOf(settings.get_string('font-style')));
-            blinkSwitch.set_active(settings.get_boolean('blink-dots'));
-            flickerSwitch.set_active(settings.get_boolean('flicker-enabled'));
-            ghostSwitch.set_active(settings.get_boolean('ghost-segments'));
-            lampTestSwitch.set_active(settings.get_boolean('startup-lamp-test'));
-            minuteFlickerSwitch.set_active(settings.get_boolean('minute-flicker'));
-            scanlinesSwitch.set_active(settings.get_boolean('crt-scanlines'));
-            snoozeSpin.set_value(settings.get_int('snooze-minutes'));
-            alarmDialogSwitch.set_active(settings.get_boolean('alarm-dialog-enabled'));
-
-            refreshPreview();
+            for (const key of settings.settings_schema.list_keys()) {
+                if (!RESET_EXCLUDED_KEYS.has(key))
+                    settings.reset(key);
+            }
         };
 
         resetButton.connect('clicked', () => {
@@ -973,43 +828,17 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
         resetRow.add_suffix(resetButton);
         resetGroup.add(resetRow);
 
-        // connectObject() only exists in the Shell process; plain connect()
-        // plus manual disconnect on close-request here.
-        const externalSyncHandlerIds = [
-            settings.connect('changed::clock-color', () => {
-                const color = settings.get_string('clock-color');
-                colorRow.set_selected(colorKeys.indexOf(color));
-                customColorRow.set_visible(color === 'custom');
-                updateGlowLimit(color);
+        const previewKeys = new Set([
+            'clock-color', 'custom-color', 'glow-intensity', 'show-frame',
+            'font-size', 'font-style', 'sharp-digits', 'alarms'
+        ]);
+        syncHandlerIds.push(settings.connect('changed', (source, key) => {
+            if (previewKeys.has(key))
                 refreshPreview();
-            }),
-            settings.connect('changed::custom-color', () => {
-                const rgba = new Gdk.RGBA();
-                rgba.parse(isValidHex(settings.get_string('custom-color')) ? settings.get_string('custom-color') : '#00ff00');
-                colorButton.set_rgba(rgba);
-                refreshPreview();
-            }),
-            settings.connect('changed::glow-intensity', () => {
-                glowSpin.set_value(settings.get_double('glow-intensity'));
-                refreshPreview();
-            }),
-            settings.connect('changed::show-frame', () => {
-                frameSwitch.set_active(settings.get_boolean('show-frame'));
-                refreshPreview();
-            }),
-            settings.connect('changed::font-size', () => {
-                fontSpin.set_value(settings.get_double('font-size'));
-                refreshPreview();
-            }),
-            settings.connect('changed::font-style', () => {
-                fontStyleRow.set_selected(fontStyleKeys.indexOf(settings.get_string('font-style')));
-                refreshPreview();
-            }),
-            settings.connect('changed::alarms', () => refreshPreview())
-        ];
+        }));
 
         window.connect('close-request', () => {
-            for (const id of externalSyncHandlerIds)
+            for (const id of syncHandlerIds)
                 settings.disconnect(id);
             return false;
         });

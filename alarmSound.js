@@ -1,0 +1,1 @@
+export const ALARM_SOUND_DURATION_MS = 6128;

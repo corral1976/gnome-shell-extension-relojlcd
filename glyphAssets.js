@@ -100,8 +100,6 @@ function parseLinearSubpaths(d) {
     return subpaths;
 }
 
-// Bold grows each bar toward its own LED only, and only along its middle:
-// growth tapers to zero near the tips so the dark gap between segments survives.
 function thickenSegmentSubpath(vertices, glyphCenterX) {
     let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
     for (const [vx, vy] of vertices) {
@@ -201,10 +199,7 @@ export function buildGlyphSvgMarkup(char, color, options = {}) {
     if (italic) {
         const centerY = GLYPH_VIEWBOX_HEIGHT / 2;
         const tanSkew = Math.tan(ITALIC_SKEW_DEGREES * Math.PI / 180);
-        // skewX() always pivots around y=500; recenter the transform there.
         const recenterX = tanSkew * centerY;
-        // Pad by this glyph's real ink extent; must match
-        // getGlyphAspectRatio().
         const pad = calculateItalicPad(glyph);
         viewBoxX -= pad;
         viewBoxWidth += pad * 2;

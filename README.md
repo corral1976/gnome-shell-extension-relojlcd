@@ -1,9 +1,8 @@
 # Retro LCD 7-Segment Clock & Widget
 
-[![build](https://img.shields.io/github/actions/workflow/status/corral1976/gnome-shell-extension-relojlcd/main.yml?style=flat-square&label=build&labelColor=282828&color=b8bb26)](https://github.com/corral1976/gnome-shell-extension-relojlcd/actions)
-[![Latest Release](https://img.shields.io/github/v/release/corral1976/gnome-shell-extension-relojlcd)](https://github.com/corral1976/gnome-shell-extension-relojlcd/releases)
-[![stars](https://img.shields.io/github/stars/corral1976/gnome-shell-extension-relojlcd?style=flat-square&label=stars&labelColor=282828&color=d79921)](https://github.com/corral1976/gnome-shell-extension-relojlcd)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GitLab release](https://img.shields.io/gitlab/v/release/corral1976%2Fgnome-shell-extension-relojlcd)](https://gitlab.com/corral1976/gnome-shell-extension-relojlcd/-/releases)
+[![pipeline status](https://gitlab.com/corral1976/gnome-shell-extension-relojlcd/badges/main/pipeline.svg)](https://gitlab.com/corral1976/gnome-shell-extension-relojlcd/-/commits/main)
 
 GNOME Shell extension that shows a retro digital LCD-style clock in the top panel, or as a floating widget on the desktop.
 
@@ -26,11 +25,16 @@ Repository mirrors: [GitLab](https://gitlab.com/corral1976/gnome-shell-extension
 - 7-segment LCD style clock
 - 4 font styles: Regular, Bold, Italic and Bold Italic, applied live from the preferences window
 - 10 color themes: neon green, amber, retro gray, ruby, sapphire, white, violet, gold, VFD teal and Nixie orange
-- Custom color picker for digits, separators, alarm dot and border, with a live preview in the preferences window
+- Custom color picker for digits, separators, alarm bell and border, with a live preview in the preferences window
 - Multiple alarms with sound, custom labels and snooze support — the alarm sound plays through GNOME Shell's own sound theme, no extra audio file needed
 - On-screen alarm dialog, so a ringing alarm isn't missed if notifications are silenced (e.g. Do Not Disturb)
 - Built-in preferences panel (GTK4/Adwaita), organized into General, Appearance, Alarms and About tabs
 - Looks good in both light and dark shell themes
+- Sharp digits on HiDPI and scaled screens, with a switch to turn it off if you prefer a softer, retro look
+- Date in the order you like: DD-MM-YYYY, MM-DD-YYYY or YYYY-MM-DD
+- The seconds follow the system clock, so they change right on time
+- If the monitor holding the desktop widget is unplugged, the widget moves to the main screen
+- Available in English and Spanish (more translations are welcome)
 - Desktop widget mode (draggable) or docked to the panel
 - Optional flicker effect, for that old-LCD-screen feel
 - Ghost segments: faint always-on digit pattern behind the active time, like a real LCD
@@ -77,6 +81,13 @@ glib-compile-schemas schemas
 
 That last line, `glib-compile-schemas schemas`, is easy to forget but important — it's what lets GNOME understand the extension's settings (colors, fonts, alarm, etc). If you skip it, the extension may not load, or its preferences panel may not open.
 
+**Optional: the Spanish translation.** The extension works in English out of the box. If your system is in Spanish and you want the menus and preferences translated, compile the translation too (you need the `gettext` package, which provides `msgfmt`). Run this in the same folder:
+
+```bash
+mkdir -p locale/es/LC_MESSAGES
+msgfmt po/es.po -o locale/es/LC_MESSAGES/relojlcd.mo
+```
+
 ### 3. Restart GNOME Shell
 
 Linux needs a quick "refresh" before it will notice the new extension. How you do this depends on the type of desktop session you're using:
@@ -106,7 +117,8 @@ The digits are drawn from small vector shapes embedded directly in `glyphAssets.
 a system font and not from separate asset files — so this is rare. If it happens, it's almost
 certainly a JavaScript error rather than a missing file; check the extension's logs
 (`journalctl -f -o cat /usr/bin/gnome-shell` while it happens, or the Looking Glass extension
-inspector) for anything mentioning `relojlcd`.
+inspector) for anything mentioning `relojlcd`. If a single digit can't be drawn, the clock keeps
+running and that digit stays blank; the logs will show one `Failed to rasterize glyph` line for it.
 
 **1. Restart GNOME Shell (or log out and back in).** On X11: `Alt+F2`, type `r`, Enter. On
 Wayland: log out and log back in (the X11 shortcut won't do anything, so that's the sign
@@ -124,6 +136,7 @@ If you did both and it still looks wrong, please open an issue with your GNOME S
 
 - GNOME Shell 45, 46, 47, 48, 49 or 50
 - The `gnome-extensions-app` (comes preinstalled on most distros)
+- `gettext` (only if you compile the optional Spanish translation by hand)
 
 ---
 
@@ -134,6 +147,9 @@ If you did both and it still looks wrong, please open an issue with your GNOME S
 
 relojlcd@carlos/
 ├── extension.js
+├── alarmManager.js
+├── alarmDialog.js
+├── alarmSound.js
 ├── colorUtils.js
 ├── renderMath.js
 ├── glyphAssets.js
@@ -145,9 +161,14 @@ relojlcd@carlos/
 ├── DSEG-LICENSE.txt
 ├── LICENSE
 ├── README.md
-└── schemas/
-    ├── org.gnome.shell.extensions.relojlcd.gschema.xml
-    └── gschemas.compiled  (auto-generated, don't commit it)
+├── schemas/
+│   ├── org.gnome.shell.extensions.relojlcd.gschema.xml
+│   └── gschemas.compiled  (auto-generated, don't commit it)
+├── po/
+│   ├── relojlcd.pot
+│   └── es.po
+└── locale/
+    └── es/LC_MESSAGES/relojlcd.mo  (generated from po/, don't commit it)
 ```
 
 The digit glyphs don't ship as separate files — they're embedded as SVG path data directly
@@ -158,6 +179,32 @@ extension. The alarm sound isn't bundled either — it plays through GNOME Shell
 theme, so there's no audio file to ship or keep in sync. The one-time notification shown
 after an update uses a stock symbolic icon from the system theme, so there's no image file
 to ship for it either.
+
+The `po/` folder holds the translation sources. The packaged extension doesn't include it;
+it ships the compiled `locale/es/LC_MESSAGES/relojlcd.mo` instead, which is built from
+`po/es.po` when the extension is packed with `gnome-extensions pack --podir=po`.
+
+---
+
+## Translations
+
+The extension is available in English and Spanish. `po/relojlcd.pot` is the template and
+`po/es.po` is the Spanish file.
+
+Want to add another language? Create a new file from the template, translate it, and send it over:
+
+```bash
+msginit --locale=fr --input=po/relojlcd.pot --output-file=po/fr.po
+```
+
+After changing any text in the code, refresh the template and merge it into each language:
+
+```bash
+xgettext --from-code=UTF-8 --language=JavaScript --keyword=_ --sort-by-file --add-location=file \
+  --package-name="Retro LCD 7-Segment Clock" -o po/relojlcd.pot \
+  extension.js prefs.js alarmDialog.js alarmManager.js
+msgmerge --update po/es.po po/relojlcd.pot
+```
 
 ---
 
@@ -180,6 +227,7 @@ If you like the extension and want to help keep it maintained:
   code, as the OFL requires for derivative works.
 - The alarm sound is played from GNOME Shell's own system sound theme, not from a file
   bundled with the extension, so no separate audio license applies.
+- The translations in `po/` are part of the project and use the same MIT License.
 
 ---
 
