@@ -34,7 +34,7 @@ Repository mirrors: [GitLab](https://gitlab.com/corral1976/gnome-shell-extension
 - Date in the order you like: DD-MM-YYYY, MM-DD-YYYY or YYYY-MM-DD
 - The seconds follow the system clock, so they change right on time
 - If the monitor holding the desktop widget is unplugged, the widget moves to the main screen
-- Available in English and Spanish (more translations are welcome)
+- Available in English, Spanish, German, French and Simplified Chinese (more translations are welcome)
 - Desktop widget mode (draggable) or docked to the panel
 - Optional flicker effect, for that old-LCD-screen feel
 - Ghost segments: faint always-on digit pattern behind the active time, like a real LCD
@@ -81,11 +81,13 @@ glib-compile-schemas schemas
 
 That last line, `glib-compile-schemas schemas`, is easy to forget but important — it's what lets GNOME understand the extension's settings (colors, fonts, alarm, etc). If you skip it, the extension may not load, or its preferences panel may not open.
 
-**Optional: the Spanish translation.** The extension works in English out of the box. If your system is in Spanish and you want the menus and preferences translated, compile the translation too (you need the `gettext` package, which provides `msgfmt`). Run this in the same folder:
+**Optional: the translations.** The extension works in English out of the box. If your system is in Spanish, German, French or Simplified Chinese and you want the menus and preferences translated, compile the translations too (you need the `gettext` package, which provides `msgfmt`). Run this in the same folder:
 
 ```bash
-mkdir -p locale/es/LC_MESSAGES
-msgfmt po/es.po -o locale/es/LC_MESSAGES/relojlcd.mo
+for lang in de es fr zh_CN; do
+    mkdir -p locale/$lang/LC_MESSAGES
+    msgfmt po/$lang.po -o locale/$lang/LC_MESSAGES/relojlcd.mo
+done
 ```
 
 ### 3. Restart GNOME Shell
@@ -113,7 +115,7 @@ If nothing shows up after all this, try restarting your whole computer once befo
 
 ## The clock shows blank or broken digits
 
-The digits are drawn from small vector shapes embedded directly in `glyphAssets.js` — not from
+The digits are drawn from small vector shapes embedded directly in `src/shared/svgData.js` — not from
 a system font and not from separate asset files — so this is rare. If it happens, it's almost
 certainly a JavaScript error rather than a missing file; check the extension's logs
 (`journalctl -f -o cat /usr/bin/gnome-shell` while it happens, or the Looking Glass extension
@@ -136,7 +138,7 @@ If you did both and it still looks wrong, please open an issue with your GNOME S
 
 - GNOME Shell 45, 46, 47, 48, 49 or 50
 - The `gnome-extensions-app` (comes preinstalled on most distros)
-- `gettext` (only if you compile the optional Spanish translation by hand)
+- `gettext` (only if you compile the optional translations by hand)
 
 ---
 
@@ -147,32 +149,59 @@ If you did both and it still looks wrong, please open an issue with your GNOME S
 
 relojlcd@carlos/
 ├── extension.js
-├── alarmManager.js
-├── alarmDialog.js
-├── alarmSound.js
-├── colorUtils.js
-├── renderMath.js
-├── glyphAssets.js
-├── glyphTexture.js
-├── sevenSegmentRow.js
-├── metadata.json
 ├── prefs.js
+├── metadata.json
 ├── stylesheet.css
 ├── DSEG-LICENSE.txt
 ├── LICENSE
 ├── README.md
+├── src/
+│   ├── clock/
+│   │   ├── clock.js
+│   │   ├── clockView.js
+│   │   ├── clockConfig.js
+│   │   ├── displayEffects.js
+│   │   ├── timeFormat.js
+│   │   └── updateNotice.js
+│   ├── ui/
+│   │   ├── clockDisplay.js
+│   │   ├── clockHost.js
+│   │   ├── indicator.js
+│   │   ├── sevenSegmentRow.js
+│   │   └── alarmDialog.js
+│   ├── alarm/
+│   │   └── alarmManager.js
+│   ├── graphics/
+│   │   └── glyphTexture.js
+│   ├── prefs/
+│   │   ├── generalPage.js
+│   │   ├── appearancePage.js
+│   │   ├── alarmsPage.js
+│   │   ├── aboutPage.js
+│   │   ├── previewArea.js
+│   │   ├── previewDrawing.js
+│   │   └── prefsHelpers.js
+│   └── shared/
+│       ├── svgData.js
+│       ├── glyphAssets.js
+│       ├── colorUtils.js
+│       ├── renderMath.js
+│       └── alarmSound.js
 ├── schemas/
 │   ├── org.gnome.shell.extensions.relojlcd.gschema.xml
 │   └── gschemas.compiled  (auto-generated, don't commit it)
 ├── po/
 │   ├── relojlcd.pot
-│   └── es.po
+│   ├── de.po
+│   ├── es.po
+│   ├── fr.po
+│   └── zh_CN.po
 └── locale/
-    └── es/LC_MESSAGES/relojlcd.mo  (generated from po/, don't commit it)
+    └── <lang>/LC_MESSAGES/relojlcd.mo  (generated from po/, don't commit it)
 ```
 
 The digit glyphs don't ship as separate files — they're embedded as SVG path data directly
-in `glyphAssets.js` and drawn at runtime, so there's nothing under `assets/` to install for
+in `src/shared/svgData.js` and drawn at runtime, so there's nothing under `assets/` to install for
 them. The original per-glyph `.svg` reference files used while designing them live in this
 repository (see the source tree on GitLab/GitHub) but aren't part of the packaged
 extension. The alarm sound isn't bundled either — it plays through GNOME Shell's own sound
@@ -181,20 +210,21 @@ after an update uses a stock symbolic icon from the system theme, so there's no 
 to ship for it either.
 
 The `po/` folder holds the translation sources. The packaged extension doesn't include it;
-it ships the compiled `locale/es/LC_MESSAGES/relojlcd.mo` instead, which is built from
-`po/es.po` when the extension is packed with `gnome-extensions pack --podir=po`.
+it ships the compiled `locale/<lang>/LC_MESSAGES/relojlcd.mo` files instead, which are built from
+the `po/*.po` files when the extension is packed with `gnome-extensions pack --podir=po`.
 
 ---
 
 ## Translations
 
-The extension is available in English and Spanish. `po/relojlcd.pot` is the template and
-`po/es.po` is the Spanish file.
+The extension is available in English, Spanish, German, French and Simplified Chinese.
+`po/relojlcd.pot` is the template, and each language has its own file: `po/es.po`, `po/de.po`,
+`po/fr.po` and `po/zh_CN.po`.
 
 Want to add another language? Create a new file from the template, translate it, and send it over:
 
 ```bash
-msginit --locale=fr --input=po/relojlcd.pot --output-file=po/fr.po
+msginit --locale=it --input=po/relojlcd.pot --output-file=po/it.po
 ```
 
 After changing any text in the code, refresh the template and merge it into each language:
@@ -202,8 +232,8 @@ After changing any text in the code, refresh the template and merge it into each
 ```bash
 xgettext --from-code=UTF-8 --language=JavaScript --keyword=_ --sort-by-file --add-location=file \
   --package-name="Retro LCD 7-Segment Clock" -o po/relojlcd.pot \
-  extension.js prefs.js alarmDialog.js alarmManager.js
-msgmerge --update po/es.po po/relojlcd.pot
+  $(find extension.js prefs.js src -name '*.js' | sort)
+for lang in de es fr zh_CN; do msgmerge --update po/$lang.po po/relojlcd.pot; done
 ```
 
 ---
@@ -219,7 +249,7 @@ If you like the extension and want to help keep it maintained:
 ## License
 
 - The extension code is licensed under the **MIT License** (see `LICENSE`).
-- The digit glyphs are embedded as SVG path data inside `glyphAssets.js`, derived from the
+- The digit glyphs are embedded as SVG path data inside `src/shared/svgData.js`, derived from the
   shapes of the **DSEG7 Classic** font by Keshikan. No `.ttf` file is bundled or installed
   on your system — the extension draws the digits directly from this embedded data.
   Because the glyph shapes are still a derivative of DSEG7, the font's **SIL Open Font

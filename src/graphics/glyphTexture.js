@@ -4,7 +4,7 @@ import GdkPixbuf from 'gi://GdkPixbuf';
 import St from 'gi://St';
 import Cogl from 'gi://Cogl';
 import * as Config from 'resource:///org/gnome/shell/misc/config.js';
-import { buildGlyphSvgMarkup } from './glyphAssets.js';
+import { buildGlyphSvgMarkup } from '../shared/glyphAssets.js';
 
 const textEncoder = new TextEncoder();
 const MAX_CACHED_CONTENTS = 512;

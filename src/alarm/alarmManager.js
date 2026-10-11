@@ -2,8 +2,8 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import { gettext as _ } from 'resource:///org/gnome/shell/extensions/extension.js';
-import { AlarmDialog } from './alarmDialog.js';
-import { ALARM_SOUND_DURATION_MS } from './alarmSound.js';
+import { AlarmDialog } from '../ui/alarmDialog.js';
+import { ALARM_SOUND_DURATION_MS } from '../shared/alarmSound.js';
 
 const ALARM_AUTO_STOP_MS = 60000;
 const SECONDS_PER_MINUTE = 60;

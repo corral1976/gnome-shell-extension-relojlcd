@@ -2,7 +2,7 @@ import Atk from 'gi://Atk';
 import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
-import { isBlankGlyph, calculateCellPixelHeight, calculateCellPixelWidth } from './glyphAssets.js';
+import { isBlankGlyph, calculateCellPixelHeight, calculateCellPixelWidth } from '../shared/glyphAssets.js';
 
 export const SevenSegmentRow = GObject.registerClass(
 { GTypeName: 'RelojLCDSevenSegmentRow' },
