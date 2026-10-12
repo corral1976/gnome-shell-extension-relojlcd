@@ -19,6 +19,11 @@ The simplest way is to install it from the official GNOME Extensions site — it
 Repository mirrors: [GitLab](https://gitlab.com/corral1976/gnome-shell-extension-relojlcd) · [GitHub](https://github.com/corral1976/gnome-shell-extension-relojlcd)
 
 ---
+## Preview
+
+![Preview](preview.png)
+
+---
 
 ## Features
 
