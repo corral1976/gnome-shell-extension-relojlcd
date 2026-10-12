@@ -27,7 +27,7 @@ export class DateTooltip {
             visible: false,
             opacity: 0
         });
-        Main.layoutManager.addChrome(this.#label, { affectsInputRegion: false });
+        Main.uiGroup.add_child(this.#label);
 
         this.#hoverId = anchor.connect('notify::hover', () => this.#onHoverChanged());
         this.#pressId = anchor.connect('button-press-event', () => {
@@ -45,7 +45,7 @@ export class DateTooltip {
             this.#showTimeoutId = null;
         }
 
-        Main.layoutManager.removeChrome(this.#label);
+        Main.uiGroup.remove_child(this.#label);
         this.#label.destroy();
         this.#label = null;
         this.#anchor = null;
