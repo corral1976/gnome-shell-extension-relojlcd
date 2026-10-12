@@ -230,12 +230,19 @@ export class AlarmManager {
     }
 
     #showAlarmDialog(alarm) {
-        this.#alarmDialog = new AlarmDialog(
+        const dialog = new AlarmDialog(
             alarm,
             () => this.#snoozeAlarm(alarm),
             () => this.stopRinging()
         );
-        this.#alarmDialog.open();
+
+        if (!dialog.open()) {
+            dialog.destroy();
+            this.#showAlarmNotification(alarm);
+            return;
+        }
+
+        this.#alarmDialog = dialog;
     }
 
     #snoozeAlarm(alarm) {

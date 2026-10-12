@@ -50,6 +50,9 @@ export function buildGeneralPage(settings, links) {
     addSwitchRow(settings, behaviorGroup, 'show-date',
         _('Show Date'),
         _('Display current date below the time'));
+    addSwitchRow(settings, behaviorGroup, 'show-date-tooltip',
+        _('Show Date on Hover'),
+        _('Show the full date in a small tooltip when the pointer rests over the clock'));
 
     const dateOrderRow = new Adw.ComboRow({
         title: _('Date Order'),

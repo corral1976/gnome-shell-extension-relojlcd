@@ -2,6 +2,7 @@
 <schemalist>
   <schema id="org.gnome.shell.extensions.relojlcd" path="/org/gnome/shell/extensions/relojlcd/">
     <key name="font-size" type="d">
+      <range min="0.5" max="10.0"/>
       <default>1.8</default>
       <summary>Font size multiplier</summary>
       <description>Controls the size of the clock display relative to the base font size</description>
@@ -30,6 +31,7 @@
       <description>Hex color code used when clock-color is set to custom</description>
     </key>
     <key name="glow-intensity" type="d">
+      <range min="0.0" max="10.0"/>
       <default>5.0</default>
       <summary>Glow or shadow intensity</summary>
       <description>Controls the glow effect for colored themes or shadow strength for retro LCD</description>
@@ -90,6 +92,7 @@
       <description>Internal flag tracking whether the pre-60 single alarm was migrated into the alarms list</description>
     </key>
     <key name="snooze-minutes" type="i">
+      <range min="1" max="60"/>
       <default>9</default>
       <summary>Snooze duration in minutes</summary>
       <description>How many minutes to wait before a snoozed alarm rings again</description>
@@ -184,6 +187,11 @@
       <default>true</default>
       <summary>On-screen alarm dialog</summary>
       <description>Show a modal on-screen dialog instead of a notification when an alarm triggers, so alarms are not missed when notifications are silenced (e.g. Do Not Disturb). When disabled, falls back to the regular notification.</description>
+    </key>
+    <key name="show-date-tooltip" type="b">
+      <default>true</default>
+      <summary>Show date on hover</summary>
+      <description>Show the full date in a small tooltip when the pointer rests over the clock</description>
     </key>
     <key name="show-frame" type="b">
       <default>true</default>

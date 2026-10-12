@@ -5,6 +5,7 @@ import { calculateRetroShadowOffset } from '../shared/renderMath.js';
 import { calculateRowPixelWidth, resolveGlyphStyleOptions } from '../shared/glyphAssets.js';
 import { ClockDisplay } from '../ui/clockDisplay.js';
 import { ClockHost, getClampedWidgetPosition } from '../ui/clockHost.js';
+import { DateTooltip } from '../ui/dateTooltip.js';
 import { COMPACT_HORIZONTAL_PADDING, readLayoutFlags } from './clockConfig.js';
 import { DisplayEffects } from './displayEffects.js';
 import { calculateTickDelayMs, formatAccessibleTime, formatTime } from './timeFormat.js';
@@ -22,6 +23,7 @@ export class ClockView {
     #display;
     #host;
     #effects;
+    #tooltip;
     #rasterScale;
     #effectiveFontSize = 0;
     #lastMinute = -1;
@@ -41,6 +43,7 @@ export class ClockView {
         this.#display = new ClockDisplay(settings, textureCache, this.#rasterScale, this.#getEffectiveFontSize());
         this.#host = new ClockHost(extension, settings, alarmManager, this.#display.actor, () => this.#schedulePanelFit());
         this.#effects = new DisplayEffects(settings, this.#display, alarmManager);
+        this.#tooltip = new DateTooltip(settings, this.#host.actor);
 
         this.#updateAlarmDot();
         this.#updateStyle();
@@ -49,8 +52,8 @@ export class ClockView {
 
         settings.connectObject(
             'changed::font-size', () => this.#scheduleStyleUpdate(),
-            'changed::clock-color', () => this.#updateStyle(),
-            'changed::custom-color', () => this.#updateStyle(),
+            'changed::clock-color', () => { this.#updateStyle(); this.#updateClock(); this.#effects.updateFlicker(); },
+            'changed::custom-color', () => { this.#updateStyle(); this.#updateClock(); },
             'changed::show-frame', () => this.#updateStyle(),
             'changed::glow-intensity', () => this.#scheduleStyleUpdate(),
             'changed::show-seconds', () => { this.#updateClock(); this.#updateStyle(); },
@@ -60,7 +63,7 @@ export class ClockView {
             'changed::blink-dots', () => this.#updateClock(),
             'changed::clock-format-24h', () => { this.#updateClock(); this.#updateStyle(); },
             'changed::flicker-enabled', () => this.#effects.updateFlicker(),
-            'changed::font-style', () => this.#updateStyle(),
+            'changed::font-style', () => { this.#updateStyle(); this.#updateClock(); },
             'changed::sharp-digits', () => this.#updateClock(),
             'changed::ghost-segments', () => { this.#display.updateGhostOpacity(); this.#updateAlarmDot(); },
             'changed::crt-scanlines', () => this.#display.updateScanlines(),
@@ -105,6 +108,8 @@ export class ClockView {
             this.#initTimeoutId = null;
         }
 
+        this.#tooltip.destroy();
+        this.#tooltip = null;
         this.#effects.destroy();
         this.#effects = null;
         this.#display.destroy();
@@ -152,6 +157,7 @@ export class ClockView {
         this.#styleUpdateDebounceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, STYLE_UPDATE_DEBOUNCE_MS, () => {
             this.#styleUpdateDebounceId = null;
             this.#updateStyle();
+            this.#updateClock();
             return GLib.SOURCE_REMOVE;
         });
     }
