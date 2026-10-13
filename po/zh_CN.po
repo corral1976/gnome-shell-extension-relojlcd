@@ -1,0 +1,490 @@
+# Chinese (Simplified) translations for Retro LCD 7-Segment Clock.
+# Copyright (C) 2026 Carlos Corral
+# This file is distributed under the same license as the Retro LCD 7-Segment Clock package.
+# Carlos Corral, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Retro LCD 7-Segment Clock 84\n"
+"Report-Msgid-Bugs-To: https://gitlab.com/corral1976/gnome-shell-extension-relojlcd/-/issues\n"
+"POT-Creation-Date: 2026-10-11 22:34+0000\n"
+"PO-Revision-Date: 2026-10-04 23:03+0000\n"
+"Last-Translator: Carlos Corral\n"
+"Language-Team: Chinese (Simplified)\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: src/alarm/alarmManager.js src/prefs/alarmsPage.js src/ui/alarmDialog.js
+msgid "Alarm"
+msgstr "闹钟"
+
+#: src/alarm/alarmManager.js src/ui/alarmDialog.js
+msgid "Snooze"
+msgstr "稍后提醒"
+
+#: src/alarm/alarmManager.js src/ui/alarmDialog.js
+msgid "Dismiss"
+msgstr "关闭"
+
+#: src/clock/updateNotice.js
+#, javascript-format
+msgid "%s updated"
+msgstr "%s 已更新"
+
+#: src/clock/updateNotice.js
+#, javascript-format
+msgid "Now running version %s."
+msgstr "当前运行版本 %s。"
+
+#: src/prefs/aboutPage.js
+msgid "About"
+msgstr "关于"
+
+#: src/prefs/aboutPage.js
+msgid "Information and credits"
+msgstr "信息与鸣谢"
+
+#: src/prefs/aboutPage.js
+msgid "Version"
+msgstr "版本"
+
+#: src/prefs/aboutPage.js
+msgid "Author"
+msgstr "作者"
+
+#: src/prefs/aboutPage.js
+msgid "Source Code"
+msgstr "源代码"
+
+#: src/prefs/aboutPage.js
+msgid "View on GitLab"
+msgstr "在 GitLab 上查看"
+
+#: src/prefs/aboutPage.js
+msgid "Open Repository"
+msgstr "打开代码仓库"
+
+#: src/prefs/aboutPage.js
+msgid "Support Us"
+msgstr "支持我们"
+
+#: src/prefs/aboutPage.js
+msgid "Support on Ko-fi"
+msgstr "在 Ko-fi 上支持"
+
+#: src/prefs/aboutPage.js
+msgid "Buy the developer a coffee"
+msgstr "请开发者喝杯咖啡"
+
+#: src/prefs/aboutPage.js
+msgid "Open Ko-fi"
+msgstr "打开 Ko-fi"
+
+#: src/prefs/aboutPage.js
+msgid "Reset"
+msgstr "重置"
+
+#: src/prefs/aboutPage.js
+msgid ""
+"Restore appearance and clock settings to their defaults. Your alarms are not"
+" affected."
+msgstr "将外观和时钟设置恢复为默认值。闹钟不受影响。"
+
+#: src/prefs/aboutPage.js
+msgid "Reset to Defaults"
+msgstr "恢复默认设置"
+
+#: src/prefs/aboutPage.js
+msgid "Reset to Defaults?"
+msgstr "恢复默认设置？"
+
+#: src/prefs/aboutPage.js
+msgid ""
+"This will restore appearance and clock settings to their defaults. Your "
+"alarms will not be affected."
+msgstr "这将把外观和时钟设置恢复为默认值。闹钟不会受到影响。"
+
+#: src/prefs/aboutPage.js
+msgid "Cancel"
+msgstr "取消"
+
+#: src/prefs/alarmsPage.js
+msgid "Alarms"
+msgstr "闹钟"
+
+#: src/prefs/alarmsPage.js
+msgid "Add one or more alarms; each one can be snoozed independently"
+msgstr "添加一个或多个闹钟；每个闹钟都可以单独稍后提醒"
+
+#: src/prefs/alarmsPage.js
+msgid "Every day"
+msgstr "每天"
+
+#: src/prefs/alarmsPage.js
+msgid "Add New Alarm"
+msgstr "添加新闹钟"
+
+#: src/prefs/alarmsPage.js
+msgid "Time"
+msgstr "时间"
+
+#: src/prefs/alarmsPage.js
+msgid "Specific Date"
+msgstr "指定日期"
+
+#: src/prefs/alarmsPage.js
+msgid "Ring once on a chosen date instead of every day"
+msgstr "在选定日期只响铃一次，而不是每天响铃"
+
+#: src/prefs/alarmsPage.js
+msgid "Date"
+msgstr "日期"
+
+#: src/prefs/alarmsPage.js
+msgid "Label"
+msgstr "标签"
+
+#: src/prefs/alarmsPage.js
+msgid "Remove This Alarm"
+msgstr "删除此闹钟"
+
+#: src/prefs/alarmsPage.js
+msgid "Sound & Snooze"
+msgstr "声音与稍后提醒"
+
+#: src/prefs/alarmsPage.js
+msgid "Test Alarm Sound"
+msgstr "测试闹钟声音"
+
+#: src/prefs/alarmsPage.js
+msgid "Play or stop the alarm sound to preview it"
+msgstr "播放或停止闹钟声音以进行试听"
+
+#: src/prefs/alarmsPage.js
+msgid "Snooze Duration"
+msgstr "稍后提醒时长"
+
+#: src/prefs/alarmsPage.js
+msgid "Minutes to wait before a snoozed alarm rings again"
+msgstr "已稍后提醒的闹钟再次响铃前等待的分钟数"
+
+#: src/prefs/alarmsPage.js
+msgid "On-Screen Alarm Dialog"
+msgstr "屏幕闹钟对话框"
+
+#: src/prefs/alarmsPage.js
+msgid ""
+"Show a dialog instead of a notification when an alarm rings, so it is not "
+"missed if notifications are silenced"
+msgstr "闹钟响起时显示对话框而不是通知，这样即使通知被静音也不会错过"
+
+#: src/prefs/appearancePage.js
+msgid "Appearance"
+msgstr "外观"
+
+#: src/prefs/appearancePage.js
+msgid "Color & Glow"
+msgstr "颜色与辉光"
+
+#: src/prefs/appearancePage.js
+msgid "Pick a theme and tune how it glows"
+msgstr "选择主题并调整辉光效果"
+
+#: src/prefs/appearancePage.js
+msgid "Color Theme"
+msgstr "颜色主题"
+
+#: src/prefs/appearancePage.js
+msgid "Choose your preferred LCD color style"
+msgstr "选择喜欢的 LCD 颜色风格"
+
+#: src/prefs/appearancePage.js src/ui/indicator.js
+msgid "Blue Sapphire"
+msgstr "蓝宝石色"
+
+#: src/prefs/appearancePage.js src/ui/indicator.js
+msgid "Neon Green"
+msgstr "霓虹绿"
+
+#: src/prefs/appearancePage.js src/ui/indicator.js
+msgid "Red Ruby"
+msgstr "红宝石色"
+
+#: src/prefs/appearancePage.js src/ui/indicator.js
+msgid "Retro LCD"
+msgstr "复古 LCD"
+
+#: src/prefs/appearancePage.js src/ui/indicator.js
+msgid "Vintage Amber"
+msgstr "复古琥珀色"
+
+#: src/prefs/appearancePage.js src/ui/indicator.js
+msgid "White LED"
+msgstr "白色 LED"
+
+#: src/prefs/appearancePage.js
+msgid "Custom Color"
+msgstr "自定义颜色"
+
+#: src/prefs/appearancePage.js src/ui/indicator.js
+msgid "Gold"
+msgstr "金色"
+
+#: src/prefs/appearancePage.js src/ui/indicator.js
+msgid "Nixie Orange"
+msgstr "Nixie 橙色"
+
+#: src/prefs/appearancePage.js src/ui/indicator.js
+msgid "VFD Teal"
+msgstr "VFD 青绿色"
+
+#: src/prefs/appearancePage.js src/ui/indicator.js
+msgid "Violet Purple"
+msgstr "紫罗兰色"
+
+#: src/prefs/appearancePage.js
+msgid "Applies to digits, separators, alarm bell and border"
+msgstr "应用于数字、分隔符、闹钟铃铛和边框"
+
+#: src/prefs/appearancePage.js
+msgid "Glow / Shadow Intensity"
+msgstr "辉光 / 阴影强度"
+
+#: src/prefs/appearancePage.js
+msgid "Control glow for colored themes or shadow strength for Retro LCD"
+msgstr "控制彩色主题的辉光，或复古 LCD 的阴影强度"
+
+#: src/prefs/appearancePage.js
+msgid "Display Border"
+msgstr "显示边框"
+
+#: src/prefs/appearancePage.js
+msgid ""
+"Hide the border outline around the display; the background and glow stay "
+"visible"
+msgstr "隐藏显示屏周围的边框轮廓；背景和辉光仍然可见"
+
+#: src/prefs/appearancePage.js
+msgid "Font & Effects"
+msgstr "字体与效果"
+
+#: src/prefs/appearancePage.js
+msgid "Adjust size, style and vintage display effects"
+msgstr "调整大小、样式和复古显示效果"
+
+#: src/prefs/appearancePage.js
+msgid "Font Size"
+msgstr "字体大小"
+
+#: src/prefs/appearancePage.js
+msgid "Adjust the clock display size"
+msgstr "调整时钟显示的大小"
+
+#: src/prefs/appearancePage.js
+msgid "Font Style"
+msgstr "字体样式"
+
+#: src/prefs/appearancePage.js
+msgid "Choose the font style (synthetic bold/italic)"
+msgstr "选择字体样式（合成粗体/斜体）"
+
+#: src/prefs/appearancePage.js
+msgid "Bold"
+msgstr "粗体"
+
+#: src/prefs/appearancePage.js
+msgid "Italic"
+msgstr "斜体"
+
+#: src/prefs/appearancePage.js
+msgid "Italic Bold"
+msgstr "粗斜体"
+
+#: src/prefs/appearancePage.js
+msgid "Regular"
+msgstr "常规"
+
+#: src/prefs/appearancePage.js
+msgid "Sharp Digits (HiDPI)"
+msgstr "清晰数字 (HiDPI)"
+
+#: src/prefs/appearancePage.js
+msgid ""
+"Draw the digits at the native screen resolution. Turn off for a softer, "
+"retro look on high-resolution screens. No effect on screens without scaling"
+msgstr "以屏幕原生分辨率绘制数字。在高分辨率屏幕上关闭可获得更柔和的复古效果。对未缩放的屏幕无效"
+
+#: src/prefs/appearancePage.js
+msgid "Blinking Separators"
+msgstr "闪烁分隔符"
+
+#: src/prefs/appearancePage.js
+msgid "Make the time separators blink for classic LCD effect"
+msgstr "让时间分隔符闪烁，呈现经典 LCD 效果"
+
+#: src/prefs/appearancePage.js
+msgid "Flicker Effect"
+msgstr "闪烁效果"
+
+#: src/prefs/appearancePage.js
+msgid "Add subtle random flicker for vintage LCD display feel"
+msgstr "添加轻微的随机闪烁，营造复古 LCD 显示屏的质感"
+
+#: src/prefs/appearancePage.js
+msgid "Ghost Segments"
+msgstr "残影笔段"
+
+#: src/prefs/appearancePage.js
+msgid "Show the unlit 7-segment pattern faintly behind the digits"
+msgstr "在数字后方淡淡显示未点亮的 7 段图案"
+
+#: src/prefs/appearancePage.js
+msgid "Lamp Test on Startup"
+msgstr "启动时点亮测试"
+
+#: src/prefs/appearancePage.js
+msgid "Briefly flash all segments when the extension starts"
+msgstr "扩展启动时短暂点亮所有笔段"
+
+#: src/prefs/appearancePage.js
+msgid "Minute Flicker"
+msgstr "分钟闪烁"
+
+#: src/prefs/appearancePage.js
+msgid "Dip the brightness briefly whenever the minute changes"
+msgstr "每当分钟变化时短暂降低亮度"
+
+#: src/prefs/appearancePage.js
+msgid "CRT Scanlines"
+msgstr "CRT 扫描线"
+
+#: src/prefs/appearancePage.js
+msgid "Overlay faint horizontal scanlines for a CRT/VFD look"
+msgstr "叠加淡淡的水平扫描线，呈现 CRT/VFD 外观"
+
+#: src/prefs/generalPage.js
+msgid "General"
+msgstr "通用"
+
+#: src/prefs/generalPage.js
+msgid "Current Date"
+msgstr "当前日期"
+
+#: src/prefs/generalPage.js
+msgid "Clock Behavior"
+msgstr "时钟行为"
+
+#: src/prefs/generalPage.js
+msgid "Choose what the clock shows and where it lives"
+msgstr "选择时钟显示的内容及其位置"
+
+#: src/prefs/generalPage.js
+msgid "Desktop Widget Mode"
+msgstr "桌面小部件模式"
+
+#: src/prefs/generalPage.js
+msgid "Show clock on desktop instead of the top bar"
+msgstr "在桌面而不是顶栏上显示时钟"
+
+#: src/prefs/generalPage.js
+msgid "Vertical Panel Layout"
+msgstr "垂直面板布局"
+
+#: src/prefs/generalPage.js
+msgid ""
+"Compact layout (bell, hours, minutes stacked, no seconds or date) for a "
+"panel docked to the left or right edge of the screen. Not used in desktop "
+"widget mode."
+msgstr "紧凑布局（铃铛、小时和分钟纵向堆叠，不显示秒和日期），适用于停靠在屏幕左侧或右侧边缘的面板。在桌面小部件模式下不使用。"
+
+#: src/prefs/generalPage.js
+msgid "24-Hour Format"
+msgstr "24 小时制"
+
+#: src/prefs/generalPage.js
+msgid "Display time in 24-hour format instead of AM/PM"
+msgstr "以 24 小时制而不是 AM/PM 显示时间"
+
+#: src/prefs/generalPage.js
+msgid "Show Seconds"
+msgstr "显示秒"
+
+#: src/prefs/generalPage.js
+msgid "Display seconds in the time display"
+msgstr "在时间显示中包含秒"
+
+#: src/prefs/generalPage.js
+msgid "Show Date"
+msgstr "显示日期"
+
+#: src/prefs/generalPage.js
+msgid "Display current date below the time"
+msgstr "在时间下方显示当前日期"
+
+#: src/prefs/generalPage.js
+msgid "Show Date on Hover"
+msgstr "悬停时显示日期"
+
+#: src/prefs/generalPage.js
+msgid ""
+"Show the full date in a small tooltip when the pointer rests over the clock"
+msgstr "指针停留在时钟上时，在小提示框中显示完整日期"
+
+#: src/prefs/generalPage.js
+msgid "Date Order"
+msgstr "日期顺序"
+
+#: src/prefs/generalPage.js
+msgid "Order of day, month and year when the date is shown"
+msgstr "显示日期时，日、月、年的排列顺序"
+
+#: src/prefs/generalPage.js
+msgid "DD-MM-YYYY"
+msgstr "DD-MM-YYYY"
+
+#: src/prefs/generalPage.js
+msgid "MM-DD-YYYY"
+msgstr "MM-DD-YYYY"
+
+#: src/prefs/generalPage.js
+msgid "YYYY-MM-DD"
+msgstr "YYYY-MM-DD"
+
+#: src/prefs/generalPage.js
+msgid "Panel Position"
+msgstr "面板位置"
+
+#: src/prefs/generalPage.js
+msgid "Choose where the clock appears on the panel"
+msgstr "选择时钟在面板上的显示位置"
+
+#: src/prefs/generalPage.js
+msgid "Center"
+msgstr "居中"
+
+#: src/prefs/generalPage.js
+msgid "Left"
+msgstr "左侧"
+
+#: src/prefs/generalPage.js
+msgid "Right"
+msgstr "右侧"
+
+#: src/prefs/previewArea.js
+msgid "Live preview"
+msgstr "实时预览"
+
+#: src/ui/clockDisplay.js
+msgid "Alarm active"
+msgstr "闹钟已启用"
+
+#: src/ui/dateTooltip.js
+msgid "%A, %-d %B %Y"
+msgstr "%Y年%-m月%-d日%A"
+
+#: src/ui/indicator.js
+msgid "More Settings…"
+msgstr "更多设置…"

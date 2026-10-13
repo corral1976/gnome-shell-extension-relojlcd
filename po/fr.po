@@ -1,0 +1,514 @@
+# French translations for Retro LCD 7-Segment Clock.
+# Copyright (C) 2026 Carlos Corral
+# This file is distributed under the same license as the Retro LCD 7-Segment Clock package.
+# Carlos Corral, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Retro LCD 7-Segment Clock 84\n"
+"Report-Msgid-Bugs-To: https://gitlab.com/corral1976/gnome-shell-extension-relojlcd/-/issues\n"
+"POT-Creation-Date: 2026-10-11 22:34+0000\n"
+"PO-Revision-Date: 2026-10-04 23:03+0000\n"
+"Last-Translator: Carlos Corral\n"
+"Language-Team: French\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#: src/alarm/alarmManager.js src/prefs/alarmsPage.js src/ui/alarmDialog.js
+msgid "Alarm"
+msgstr "Alarme"
+
+#: src/alarm/alarmManager.js src/ui/alarmDialog.js
+msgid "Snooze"
+msgstr "Reporter"
+
+#: src/alarm/alarmManager.js src/ui/alarmDialog.js
+msgid "Dismiss"
+msgstr "Ignorer"
+
+#: src/clock/updateNotice.js
+#, javascript-format
+msgid "%s updated"
+msgstr "%s mis à jour"
+
+#: src/clock/updateNotice.js
+#, javascript-format
+msgid "Now running version %s."
+msgstr "Version %s en cours d’exécution."
+
+#: src/prefs/aboutPage.js
+msgid "About"
+msgstr "À propos"
+
+#: src/prefs/aboutPage.js
+msgid "Information and credits"
+msgstr "Informations et crédits"
+
+#: src/prefs/aboutPage.js
+msgid "Version"
+msgstr "Version"
+
+#: src/prefs/aboutPage.js
+msgid "Author"
+msgstr "Auteur"
+
+#: src/prefs/aboutPage.js
+msgid "Source Code"
+msgstr "Code source"
+
+#: src/prefs/aboutPage.js
+msgid "View on GitLab"
+msgstr "Voir sur GitLab"
+
+#: src/prefs/aboutPage.js
+msgid "Open Repository"
+msgstr "Ouvrir le dépôt"
+
+#: src/prefs/aboutPage.js
+msgid "Support Us"
+msgstr "Nous soutenir"
+
+#: src/prefs/aboutPage.js
+msgid "Support on Ko-fi"
+msgstr "Soutenir sur Ko-fi"
+
+#: src/prefs/aboutPage.js
+msgid "Buy the developer a coffee"
+msgstr "Offrir un café au développeur"
+
+#: src/prefs/aboutPage.js
+msgid "Open Ko-fi"
+msgstr "Ouvrir Ko-fi"
+
+#: src/prefs/aboutPage.js
+msgid "Reset"
+msgstr "Réinitialiser"
+
+#: src/prefs/aboutPage.js
+msgid ""
+"Restore appearance and clock settings to their defaults. Your alarms are not"
+" affected."
+msgstr ""
+"Rétablit les paramètres d’apparence et de l’horloge à leurs valeurs par "
+"défaut. Les alarmes ne sont pas affectées."
+
+#: src/prefs/aboutPage.js
+msgid "Reset to Defaults"
+msgstr "Rétablir les valeurs par défaut"
+
+#: src/prefs/aboutPage.js
+msgid "Reset to Defaults?"
+msgstr "Rétablir les valeurs par défaut ?"
+
+#: src/prefs/aboutPage.js
+msgid ""
+"This will restore appearance and clock settings to their defaults. Your "
+"alarms will not be affected."
+msgstr ""
+"Cela rétablira les paramètres d’apparence et de l’horloge à leurs valeurs "
+"par défaut. Les alarmes ne seront pas affectées."
+
+#: src/prefs/aboutPage.js
+msgid "Cancel"
+msgstr "Annuler"
+
+#: src/prefs/alarmsPage.js
+msgid "Alarms"
+msgstr "Alarmes"
+
+#: src/prefs/alarmsPage.js
+msgid "Add one or more alarms; each one can be snoozed independently"
+msgstr ""
+"Ajouter une ou plusieurs alarmes ; chacune peut être reportée indépendamment"
+
+#: src/prefs/alarmsPage.js
+msgid "Every day"
+msgstr "Tous les jours"
+
+#: src/prefs/alarmsPage.js
+msgid "Add New Alarm"
+msgstr "Ajouter une nouvelle alarme"
+
+#: src/prefs/alarmsPage.js
+msgid "Time"
+msgstr "Heure"
+
+#: src/prefs/alarmsPage.js
+msgid "Specific Date"
+msgstr "Date précise"
+
+#: src/prefs/alarmsPage.js
+msgid "Ring once on a chosen date instead of every day"
+msgstr "Sonne une seule fois à une date choisie plutôt que tous les jours"
+
+#: src/prefs/alarmsPage.js
+msgid "Date"
+msgstr "Date"
+
+#: src/prefs/alarmsPage.js
+msgid "Label"
+msgstr "Libellé"
+
+#: src/prefs/alarmsPage.js
+msgid "Remove This Alarm"
+msgstr "Supprimer cette alarme"
+
+#: src/prefs/alarmsPage.js
+msgid "Sound & Snooze"
+msgstr "Son et report"
+
+#: src/prefs/alarmsPage.js
+msgid "Test Alarm Sound"
+msgstr "Tester le son de l’alarme"
+
+#: src/prefs/alarmsPage.js
+msgid "Play or stop the alarm sound to preview it"
+msgstr "Lire ou arrêter le son de l’alarme pour l’écouter"
+
+#: src/prefs/alarmsPage.js
+msgid "Snooze Duration"
+msgstr "Durée du report"
+
+#: src/prefs/alarmsPage.js
+msgid "Minutes to wait before a snoozed alarm rings again"
+msgstr "Minutes d’attente avant qu’une alarme reportée sonne à nouveau"
+
+#: src/prefs/alarmsPage.js
+msgid "On-Screen Alarm Dialog"
+msgstr "Boîte de dialogue d’alarme à l’écran"
+
+#: src/prefs/alarmsPage.js
+msgid ""
+"Show a dialog instead of a notification when an alarm rings, so it is not "
+"missed if notifications are silenced"
+msgstr ""
+"Affiche une boîte de dialogue plutôt qu’une notification lorsqu’une alarme "
+"sonne, pour ne pas la manquer si les notifications sont désactivées"
+
+#: src/prefs/appearancePage.js
+msgid "Appearance"
+msgstr "Apparence"
+
+#: src/prefs/appearancePage.js
+msgid "Color & Glow"
+msgstr "Couleur et lueur"
+
+#: src/prefs/appearancePage.js
+msgid "Pick a theme and tune how it glows"
+msgstr "Choisir un thème et régler son intensité lumineuse"
+
+#: src/prefs/appearancePage.js
+msgid "Color Theme"
+msgstr "Thème de couleur"
+
+#: src/prefs/appearancePage.js
+msgid "Choose your preferred LCD color style"
+msgstr "Choisir le style de couleur LCD préféré"
+
+#: src/prefs/appearancePage.js src/ui/indicator.js
+msgid "Blue Sapphire"
+msgstr "Bleu saphir"
+
+#: src/prefs/appearancePage.js src/ui/indicator.js
+msgid "Neon Green"
+msgstr "Vert néon"
+
+#: src/prefs/appearancePage.js src/ui/indicator.js
+msgid "Red Ruby"
+msgstr "Rouge rubis"
+
+#: src/prefs/appearancePage.js src/ui/indicator.js
+msgid "Retro LCD"
+msgstr "LCD rétro"
+
+#: src/prefs/appearancePage.js src/ui/indicator.js
+msgid "Vintage Amber"
+msgstr "Ambre vintage"
+
+#: src/prefs/appearancePage.js src/ui/indicator.js
+msgid "White LED"
+msgstr "LED blanche"
+
+#: src/prefs/appearancePage.js
+msgid "Custom Color"
+msgstr "Couleur personnalisée"
+
+#: src/prefs/appearancePage.js src/ui/indicator.js
+msgid "Gold"
+msgstr "Or"
+
+#: src/prefs/appearancePage.js src/ui/indicator.js
+msgid "Nixie Orange"
+msgstr "Orange Nixie"
+
+#: src/prefs/appearancePage.js src/ui/indicator.js
+msgid "VFD Teal"
+msgstr "Sarcelle VFD"
+
+#: src/prefs/appearancePage.js src/ui/indicator.js
+msgid "Violet Purple"
+msgstr "Violet pourpre"
+
+#: src/prefs/appearancePage.js
+msgid "Applies to digits, separators, alarm bell and border"
+msgstr ""
+"S’applique aux chiffres, aux séparateurs, à la cloche d’alarme et à la "
+"bordure"
+
+#: src/prefs/appearancePage.js
+msgid "Glow / Shadow Intensity"
+msgstr "Intensité de la lueur / de l’ombre"
+
+#: src/prefs/appearancePage.js
+msgid "Control glow for colored themes or shadow strength for Retro LCD"
+msgstr ""
+"Règle la lueur des thèmes colorés ou l’intensité de l’ombre pour LCD rétro"
+
+#: src/prefs/appearancePage.js
+msgid "Display Border"
+msgstr "Bordure de l’affichage"
+
+#: src/prefs/appearancePage.js
+msgid ""
+"Hide the border outline around the display; the background and glow stay "
+"visible"
+msgstr ""
+"Masque le contour de la bordure autour de l’affichage ; le fond et la lueur "
+"restent visibles"
+
+#: src/prefs/appearancePage.js
+msgid "Font & Effects"
+msgstr "Police et effets"
+
+#: src/prefs/appearancePage.js
+msgid "Adjust size, style and vintage display effects"
+msgstr "Régler la taille, le style et les effets d’affichage vintage"
+
+#: src/prefs/appearancePage.js
+msgid "Font Size"
+msgstr "Taille de la police"
+
+#: src/prefs/appearancePage.js
+msgid "Adjust the clock display size"
+msgstr "Régler la taille de l’affichage de l’horloge"
+
+#: src/prefs/appearancePage.js
+msgid "Font Style"
+msgstr "Style de police"
+
+#: src/prefs/appearancePage.js
+msgid "Choose the font style (synthetic bold/italic)"
+msgstr "Choisir le style de police (gras/italique synthétiques)"
+
+#: src/prefs/appearancePage.js
+msgid "Bold"
+msgstr "Gras"
+
+#: src/prefs/appearancePage.js
+msgid "Italic"
+msgstr "Italique"
+
+#: src/prefs/appearancePage.js
+msgid "Italic Bold"
+msgstr "Italique gras"
+
+#: src/prefs/appearancePage.js
+msgid "Regular"
+msgstr "Normal"
+
+#: src/prefs/appearancePage.js
+msgid "Sharp Digits (HiDPI)"
+msgstr "Chiffres nets (HiDPI)"
+
+#: src/prefs/appearancePage.js
+msgid ""
+"Draw the digits at the native screen resolution. Turn off for a softer, "
+"retro look on high-resolution screens. No effect on screens without scaling"
+msgstr ""
+"Dessine les chiffres à la résolution native de l’écran. À désactiver pour un"
+" aspect rétro plus doux sur les écrans haute résolution. Sans effet sur les "
+"écrans sans mise à l’échelle"
+
+#: src/prefs/appearancePage.js
+msgid "Blinking Separators"
+msgstr "Séparateurs clignotants"
+
+#: src/prefs/appearancePage.js
+msgid "Make the time separators blink for classic LCD effect"
+msgstr "Fait clignoter les séparateurs de l’heure pour l’effet LCD classique"
+
+#: src/prefs/appearancePage.js
+msgid "Flicker Effect"
+msgstr "Effet de scintillement"
+
+#: src/prefs/appearancePage.js
+msgid "Add subtle random flicker for vintage LCD display feel"
+msgstr ""
+"Ajoute un scintillement aléatoire discret pour retrouver la sensation d’un "
+"écran LCD vintage"
+
+#: src/prefs/appearancePage.js
+msgid "Ghost Segments"
+msgstr "Segments fantômes"
+
+#: src/prefs/appearancePage.js
+msgid "Show the unlit 7-segment pattern faintly behind the digits"
+msgstr ""
+"Affiche faiblement le motif des 7 segments éteints derrière les chiffres"
+
+#: src/prefs/appearancePage.js
+msgid "Lamp Test on Startup"
+msgstr "Test des lampes au démarrage"
+
+#: src/prefs/appearancePage.js
+msgid "Briefly flash all segments when the extension starts"
+msgstr "Allume brièvement tous les segments au démarrage de l’extension"
+
+#: src/prefs/appearancePage.js
+msgid "Minute Flicker"
+msgstr "Scintillement à la minute"
+
+#: src/prefs/appearancePage.js
+msgid "Dip the brightness briefly whenever the minute changes"
+msgstr "Réduit brièvement la luminosité à chaque changement de minute"
+
+#: src/prefs/appearancePage.js
+msgid "CRT Scanlines"
+msgstr "Lignes de balayage CRT"
+
+#: src/prefs/appearancePage.js
+msgid "Overlay faint horizontal scanlines for a CRT/VFD look"
+msgstr ""
+"Superpose de fines lignes de balayage horizontales pour un aspect CRT/VFD"
+
+#: src/prefs/generalPage.js
+msgid "General"
+msgstr "Général"
+
+#: src/prefs/generalPage.js
+msgid "Current Date"
+msgstr "Date actuelle"
+
+#: src/prefs/generalPage.js
+msgid "Clock Behavior"
+msgstr "Comportement de l’horloge"
+
+#: src/prefs/generalPage.js
+msgid "Choose what the clock shows and where it lives"
+msgstr "Choisir ce que l’horloge affiche et où elle se place"
+
+#: src/prefs/generalPage.js
+msgid "Desktop Widget Mode"
+msgstr "Mode widget de bureau"
+
+#: src/prefs/generalPage.js
+msgid "Show clock on desktop instead of the top bar"
+msgstr "Afficher l’horloge sur le bureau plutôt que dans la barre supérieure"
+
+#: src/prefs/generalPage.js
+msgid "Vertical Panel Layout"
+msgstr "Disposition de panneau vertical"
+
+#: src/prefs/generalPage.js
+msgid ""
+"Compact layout (bell, hours, minutes stacked, no seconds or date) for a "
+"panel docked to the left or right edge of the screen. Not used in desktop "
+"widget mode."
+msgstr ""
+"Disposition compacte (cloche, heures et minutes empilées, sans secondes ni "
+"date) pour un panneau ancré au bord gauche ou droit de l’écran. Non utilisée"
+" en mode widget de bureau."
+
+#: src/prefs/generalPage.js
+msgid "24-Hour Format"
+msgstr "Format 24 heures"
+
+#: src/prefs/generalPage.js
+msgid "Display time in 24-hour format instead of AM/PM"
+msgstr "Afficher l’heure au format 24 heures plutôt qu’en AM/PM"
+
+#: src/prefs/generalPage.js
+msgid "Show Seconds"
+msgstr "Afficher les secondes"
+
+#: src/prefs/generalPage.js
+msgid "Display seconds in the time display"
+msgstr "Afficher les secondes dans l’affichage de l’heure"
+
+#: src/prefs/generalPage.js
+msgid "Show Date"
+msgstr "Afficher la date"
+
+#: src/prefs/generalPage.js
+msgid "Display current date below the time"
+msgstr "Afficher la date actuelle sous l’heure"
+
+#: src/prefs/generalPage.js
+msgid "Show Date on Hover"
+msgstr "Afficher la date au survol"
+
+#: src/prefs/generalPage.js
+msgid ""
+"Show the full date in a small tooltip when the pointer rests over the clock"
+msgstr ""
+"Affiche la date complète dans une petite infobulle lorsque le pointeur reste"
+" sur l’horloge"
+
+#: src/prefs/generalPage.js
+msgid "Date Order"
+msgstr "Ordre de la date"
+
+#: src/prefs/generalPage.js
+msgid "Order of day, month and year when the date is shown"
+msgstr "Ordre du jour, du mois et de l’année lorsque la date est affichée"
+
+#: src/prefs/generalPage.js
+msgid "DD-MM-YYYY"
+msgstr "JJ-MM-AAAA"
+
+#: src/prefs/generalPage.js
+msgid "MM-DD-YYYY"
+msgstr "MM-JJ-AAAA"
+
+#: src/prefs/generalPage.js
+msgid "YYYY-MM-DD"
+msgstr "AAAA-MM-JJ"
+
+#: src/prefs/generalPage.js
+msgid "Panel Position"
+msgstr "Position dans le panneau"
+
+#: src/prefs/generalPage.js
+msgid "Choose where the clock appears on the panel"
+msgstr "Choisir où l’horloge apparaît dans le panneau"
+
+#: src/prefs/generalPage.js
+msgid "Center"
+msgstr "Centre"
+
+#: src/prefs/generalPage.js
+msgid "Left"
+msgstr "Gauche"
+
+#: src/prefs/generalPage.js
+msgid "Right"
+msgstr "Droite"
+
+#: src/prefs/previewArea.js
+msgid "Live preview"
+msgstr "Aperçu en direct"
+
+#: src/ui/clockDisplay.js
+msgid "Alarm active"
+msgstr "Alarme active"
+
+#: src/ui/dateTooltip.js
+msgid "%A, %-d %B %Y"
+msgstr "%A %-d %B %Y"
+
+#: src/ui/indicator.js
+msgid "More Settings…"
+msgstr "Plus de paramètres…"
