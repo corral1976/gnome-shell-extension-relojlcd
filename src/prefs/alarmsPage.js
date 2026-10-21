@@ -12,7 +12,7 @@ function daysInMonth(year, month) {
     return new Date(year, month, 0).getDate();
 }
 
-export function buildAlarmsPage(settings, window, refreshPreview) {
+export function buildAlarmsPage(settings, window, links, refreshPreview) {
     const page = new Adw.PreferencesPage({
         title: _('Alarms'),
         icon_name: 'alarm-symbolic'
@@ -25,6 +25,7 @@ export function buildAlarmsPage(settings, window, refreshPreview) {
     page.add(alarmGroup);
 
     let alarms = parseAlarms(settings.get_string('alarms'));
+    const enabledSwitches = new Map();
     const saveAlarms = () => {
         settings.set_string('alarms', JSON.stringify(alarms));
         refreshPreview();
@@ -60,9 +61,11 @@ export function buildAlarmsPage(settings, window, refreshPreview) {
             valign: Gtk.Align.CENTER
         });
         enabledSwitch.connect('notify::active', (w) => {
+            if (alarm.enabled === w.active) return;
             alarm.enabled = w.active;
             saveAlarms();
         });
+        enabledSwitches.set(alarm.id, enabledSwitch);
         row.add_prefix(enabledSwitch);
 
         const timeRow = new Adw.ActionRow({ title: _('Time') });
@@ -183,6 +186,7 @@ export function buildAlarmsPage(settings, window, refreshPreview) {
         });
         deleteButton.connect('clicked', () => {
             alarms = alarms.filter(existing => existing.id !== alarm.id);
+            enabledSwitches.delete(alarm.id);
             saveAlarms();
             alarmGroup.remove(row);
         });
@@ -205,6 +209,15 @@ export function buildAlarmsPage(settings, window, refreshPreview) {
     });
 
     alarmGroup.add(addAlarmButtonRow);
+
+    links.connect('changed::alarms', () => {
+        for (const stored of parseAlarms(settings.get_string('alarms'))) {
+            const local = alarms.find(existing => existing.id === stored.id);
+            if (!local || local.enabled === stored.enabled) continue;
+            local.enabled = stored.enabled;
+            enabledSwitches.get(stored.id).set_active(stored.enabled);
+        }
+    });
 
     const alarmSettingsGroup = new Adw.PreferencesGroup({
         title: escapeMarkup(_('Sound & Snooze'))

@@ -4,8 +4,7 @@ import Gtk from 'gi://Gtk';
 import { gettext as _ } from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
 const RESET_EXCLUDED_KEYS = new Set([
-    'alarms', 'alarms-migrated', 'alarm-enabled', 'alarm-hour', 'alarm-minute',
-    'alarm-message', 'widget-x', 'widget-y', 'last-version',
+    'alarms', 'widget-x', 'widget-y', 'last-version',
     'test-alarm-counter', 'test-alarm-stop-counter'
 ]);
 

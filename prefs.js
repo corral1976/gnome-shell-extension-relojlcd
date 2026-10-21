@@ -13,7 +13,7 @@ export default class RelojLCDPreferences extends ExtensionPreferences {
 
         window.add(buildGeneralPage(settings, links));
         window.add(appearance.page);
-        window.add(buildAlarmsPage(settings, window, appearance.refreshPreview));
+        window.add(buildAlarmsPage(settings, window, links, appearance.refreshPreview));
         window.add(buildAboutPage(settings, window, this.metadata));
 
         window.connect('close-request', () => {

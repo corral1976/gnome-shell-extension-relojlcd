@@ -32,7 +32,6 @@ export class AlarmManager {
         this.#onRingingChanged = onRingingChanged;
         this.#onAlarmsChanged = onAlarmsChanged;
 
-        this.#migrateLegacyAlarm();
         this.#alarms = this.#parseAlarms();
 
         this.#settings.connectObject(
@@ -139,22 +138,6 @@ export class AlarmManager {
         });
     }
 
-    #migrateLegacyAlarm() {
-        if (this.#settings.get_boolean('alarms-migrated')) return;
-        this.#settings.set_boolean('alarms-migrated', true);
-
-        if (!this.#settings.get_boolean('alarm-enabled')) return;
-
-        const legacyAlarm = {
-            id: GLib.uuid_string_random(),
-            hour: this.#settings.get_int('alarm-hour'),
-            minute: this.#settings.get_int('alarm-minute'),
-            enabled: true,
-            label: this.#settings.get_string('alarm-message') || _('Alarm')
-        };
-        this.#settings.set_string('alarms', JSON.stringify([legacyAlarm]));
-    }
-
     #disableOneTimeAlarm(alarm) {
         alarm.enabled = false;
         this.#settings.set_string('alarms', JSON.stringify(this.#alarms));
@@ -254,7 +237,9 @@ export class AlarmManager {
         const snoozeMinutes = this.#settings.get_int('snooze-minutes');
         const timeoutId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, snoozeMinutes * SECONDS_PER_MINUTE, () => {
             this.#snoozeTimeoutIds.delete(alarm.id);
-            this.#triggerAlarm(alarm);
+            const currentAlarm = this.#alarms.find(candidate => candidate.id === alarm.id);
+            if (currentAlarm && (currentAlarm.enabled || currentAlarm.year !== undefined))
+                this.#triggerAlarm(currentAlarm);
             return GLib.SOURCE_REMOVE;
         });
         this.#snoozeTimeoutIds.set(alarm.id, timeoutId);

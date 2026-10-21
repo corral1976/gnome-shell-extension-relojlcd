@@ -19,11 +19,6 @@ The simplest way is to install it from the official GNOME Extensions site — it
 Repository mirrors: [GitLab](https://gitlab.com/corral1976/gnome-shell-extension-relojlcd) · [GitHub](https://github.com/corral1976/gnome-shell-extension-relojlcd)
 
 ---
-## Preview
-
-![Preview](preview.png)
-
----
 
 ## Features
 
@@ -47,7 +42,7 @@ Repository mirrors: [GitLab](https://gitlab.com/corral1976/gnome-shell-extension
 - Minute flicker: a subtle brightness dip whenever the minute changes
 - CRT scanlines overlay, for a retro tube/VFD look
 - Toggleable display border: hide just the outline, keeping the background and glow
-- Date on hover: rest the pointer over the clock and a small tooltip shows today's full date, in your language (can be turned off in Preferences)
+- Date on hover: rest the pointer over the clock and a small tooltip shows today's full date, in your language and in the clock's current colors (can be turned off in Preferences)
 - Quick color menu: click the panel indicator for instant theme switching without opening full Preferences
 - Update notice: a one-time notification (with the extension's icon) lets you know when it has updated to a new version
 

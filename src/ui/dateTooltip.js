@@ -3,11 +3,13 @@ import GLib from 'gi://GLib';
 import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { gettext as _ } from 'resource:///org/gnome/shell/extensions/extension.js';
+import { getTheme } from '../clock/clockConfig.js';
 
 const SHOW_DELAY_MS = 400;
 const FADE_MS = 150;
 const ANCHOR_GAP = 6;
 const MONITOR_MARGIN = 8;
+const COLOR_THEME_BACKGROUND = 'rgba(0, 0, 0, 0.9)';
 
 export class DateTooltip {
     #settings;
@@ -74,8 +76,16 @@ export class DateTooltip {
         });
     }
 
+    #applyTheme() {
+        const colorType = this.#settings.get_string('clock-color');
+        const theme = getTheme(this.#settings, colorType);
+        const background = colorType === 'gray' ? theme.bg : COLOR_THEME_BACKGROUND;
+        this.#label.set_style(`color: ${theme.main}; background-color: ${background}; border: 1px solid ${theme.border};`);
+    }
+
     #show() {
         this.#label.set_text(GLib.DateTime.new_now_local().format(_('%A, %-d %B %Y')));
+        this.#applyTheme();
         this.#label.remove_all_transitions();
         this.#label.show();
         this.#positionLabel();
