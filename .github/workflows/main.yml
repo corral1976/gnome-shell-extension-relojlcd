@@ -36,9 +36,8 @@ jobs:
           UUID=$(jq -r '.uuid' metadata.json)
           echo "uuid=$UUID" >> $GITHUB_OUTPUT
 
-      - name: Compile schemas and translations
+      - name: Compile translations
         run: |
-          glib-compile-schemas schemas
           for po in po/*.po; do
             lang=$(basename "$po" .po)
             mkdir -p "locale/$lang/LC_MESSAGES"
