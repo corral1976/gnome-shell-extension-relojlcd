@@ -2,24 +2,18 @@ name: CI & Build Release for GNOME Extension
 
 on:
   push:
-    branches:
-      - main
-      - master
-    tags:
-      - 'v*'
+    branches: [main, master]
+    tags: ['v*']
   pull_request:
-    branches:
-      - main
-      - master
+    branches: [main, master]
 
 jobs:
   build:
     name: Validate and Build Extension
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install dependencies
         run: |
@@ -44,11 +38,10 @@ jobs:
 
       - name: Create Extension Package (.zip)
         run: |
-          # Crea un paquete ZIP excluyendo archivos innecesarios de Git
           zip -r "${{ steps.get_uuid.outputs.uuid }}.zip" . -x "*.git*" ".github/*" "README.md" "LICENSE"
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: extension-package
           path: "${{ steps.get_uuid.outputs.uuid }}.zip"
@@ -58,13 +51,11 @@ jobs:
     needs: build
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: write
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
       - name: Download Artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: extension-package
 
