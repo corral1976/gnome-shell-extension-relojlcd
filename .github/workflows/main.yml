@@ -8,7 +8,7 @@ on:
     branches: [main, master]
 
 jobs:
-  build:
+    build:
     name: Validate and Build Extension
     runs-on: ubuntu-latest
     steps:
@@ -36,16 +36,27 @@ jobs:
           UUID=$(jq -r '.uuid' metadata.json)
           echo "uuid=$UUID" >> $GITHUB_OUTPUT
 
+      # NUEVO: compila schemas y traducciones
+      - name: Compile schemas and translations
+        run: |
+          glib-compile-schemas schemas
+          for po in po/*.po; do
+            lang=$(basename "$po" .po)
+            mkdir -p "locale/$lang/LC_MESSAGES"
+            msgfmt "$po" -o "locale/$lang/LC_MESSAGES/relojlcd.mo"
+          done
+
+      # CAMBIADO: ahora excluye po/ y preview.png, e incluye LICENSE
       - name: Create Extension Package (.zip)
         run: |
-          zip -r "${{ steps.get_uuid.outputs.uuid }}.zip" . -x "*.git*" ".github/*" "README.md" "LICENSE"
+          zip -r "${{ steps.get_uuid.outputs.uuid }}.zip" . \
+            -x "*.git*" ".github/*" "README.md" "po/*" "preview.png"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v6
         with:
           name: extension-package
           path: "${{ steps.get_uuid.outputs.uuid }}.zip"
-
   release:
     name: Create GitHub Release
     needs: build
