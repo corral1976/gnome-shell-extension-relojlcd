@@ -3,17 +3,17 @@ import Gtk from 'gi://Gtk';
 import { gettext as _ } from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 import { calculateRetroShadowOffset, RETRO_SHADOW_RGBA } from '../shared/renderMath.js';
 import {
+    calculateAlarmIconGap,
     calculateCellPixelHeight,
     calculateCellPixelWidth,
     calculateRowPixelWidth,
     resolveGlyphStyleOptions
 } from '../shared/glyphAssets.js';
+import { buildSeparator } from '../shared/timeLayout.js';
 import { drawAlarmIcon, drawGlyphRow, drawPreviewChrome, getPreviewColors } from './previewDrawing.js';
 import { parseAlarms } from './prefsHelpers.js';
 
 const PREVIEW_MAX_FONT_SIZE = 4;
-const PREVIEW_TEXT = '88:88';
-const PREVIEW_ALARM_SLOT_RATIO = 0.15;
 
 export function createPreview(settings, links) {
     const glyphPreviewCache = new Map();
@@ -30,12 +30,13 @@ export function createPreview(settings, links) {
         const fontSize = Math.min(settings.get_double('font-size'), PREVIEW_MAX_FONT_SIZE);
         const styleOptions = resolveGlyphStyleOptions(settings.get_string('font-style'));
         const hasEnabledAlarm = parseAlarms(settings.get_string('alarms')).some(alarm => alarm.enabled);
+        const previewText = ['88', '88'].join(buildSeparator(':', settings.get_boolean('condensed-mode')));
         const cellHeight = calculateCellPixelHeight(fontSize);
-        const rowWidth = calculateRowPixelWidth(fontSize, PREVIEW_TEXT, styleOptions.italic);
-        const alarmSlotWidth = hasEnabledAlarm ? calculateCellPixelWidth(fontSize, '8') : 0;
-        const alarmMargin = hasEnabledAlarm ? alarmSlotWidth * PREVIEW_ALARM_SLOT_RATIO : 0;
+        const rowWidth = calculateRowPixelWidth(fontSize, previewText, styleOptions.italic);
+        const alarmSlotWidth = hasEnabledAlarm ? calculateCellPixelWidth(fontSize, 'alarm', styleOptions.italic) : 0;
+        const alarmMargin = hasEnabledAlarm ? calculateAlarmIconGap(fontSize) : 0;
         return {
-            fontSize, styleOptions, hasEnabledAlarm, cellHeight, rowWidth, alarmSlotWidth, alarmMargin,
+            fontSize, styleOptions, hasEnabledAlarm, previewText, cellHeight, rowWidth, alarmSlotWidth, alarmMargin,
             totalWidth: alarmSlotWidth + alarmMargin + rowWidth
         };
     };
@@ -62,11 +63,11 @@ export function createPreview(settings, links) {
 
         if (isRetro && glowValue >= 1) {
             const shadowOffset = calculateRetroShadowOffset(glowValue, layout.fontSize);
-            drawGlyphRow(cr, glyphPreviewCache, PREVIEW_TEXT, RETRO_SHADOW_RGBA, layout.fontSize,
+            drawGlyphRow(cr, glyphPreviewCache, layout.previewText, RETRO_SHADOW_RGBA, layout.fontSize,
                 layout.styleOptions, x + shadowOffset, centerY + shadowOffset, scale);
         }
 
-        drawGlyphRow(cr, glyphPreviewCache, PREVIEW_TEXT, colors.main, layout.fontSize,
+        drawGlyphRow(cr, glyphPreviewCache, layout.previewText, colors.main, layout.fontSize,
             layout.styleOptions, x, centerY, scale);
     });
 
@@ -83,7 +84,7 @@ export function createPreview(settings, links) {
 
     const previewKeys = new Set([
         'clock-color', 'custom-color', 'glow-intensity', 'show-frame',
-        'font-size', 'font-style', 'sharp-digits', 'alarms'
+        'font-size', 'font-style', 'sharp-digits', 'alarms', 'condensed-mode'
     ]);
     links.connect('changed', (source, key) => {
         if (previewKeys.has(key))

@@ -5,10 +5,11 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: Retro LCD 7-Segment Clock 84\n"
-"Report-Msgid-Bugs-To: https://gitlab.com/corral1976/gnome-shell-extension-relojlcd/-/issues\n"
-"POT-Creation-Date: 2026-10-11 22:34+0000\n"
-"PO-Revision-Date: 2026-10-02 19:02+0000\n"
+"Project-Id-Version: Retro LCD 7-Segment Clock 86\n"
+"Report-Msgid-Bugs-To: https://gitlab.com/corral1976/gnome-shell-extension-"
+"relojlcd/-/issues\n"
+"POT-Creation-Date: 2026-11-01 03:49+0000\n"
+"PO-Revision-Date: 2026-11-01 03:49+0000\n"
 "Last-Translator: Carlos Corral\n"
 "Language-Team: Spanish\n"
 "Language: es\n"
@@ -16,6 +17,10 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/alarm/alarmManager.js
+msgid "Missed alarm"
+msgstr "Alarma perdida"
 
 #: src/alarm/alarmManager.js src/prefs/alarmsPage.js src/ui/alarmDialog.js
 msgid "Alarm"
@@ -89,8 +94,8 @@ msgstr "Restablecer"
 
 #: src/prefs/aboutPage.js
 msgid ""
-"Restore appearance and clock settings to their defaults. Your alarms are not"
-" affected."
+"Restore appearance and clock settings to their defaults. Your alarms are not "
+"affected."
 msgstr ""
 "Restablece los ajustes de apariencia y del reloj a sus valores "
 "predeterminados. Tus alarmas no se ven afectadas."
@@ -264,8 +269,8 @@ msgstr "Intensidad del brillo / sombra"
 #: src/prefs/appearancePage.js
 msgid "Control glow for colored themes or shadow strength for Retro LCD"
 msgstr ""
-"Controla el brillo de los temas de color o la intensidad de la sombra en LCD"
-" retro"
+"Controla el brillo de los temas de color o la intensidad de la sombra en LCD "
+"retro"
 
 #: src/prefs/appearancePage.js
 msgid "Display Border"
@@ -420,8 +425,17 @@ msgid ""
 "widget mode."
 msgstr ""
 "Disposición compacta (campana, horas y minutos apilados, sin segundos ni "
-"fecha) para un panel anclado al borde izquierdo o derecho de la pantalla. No"
-" se usa en el modo widget de escritorio."
+"fecha) para un panel anclado al borde izquierdo o derecho de la pantalla. No "
+"se usa en el modo widget de escritorio."
+
+#: src/prefs/generalPage.js
+msgid "Condensed Mode"
+msgstr "Modo condensado"
+
+#: src/prefs/generalPage.js
+msgid "Tighten the spacing around the separators for a narrower clock"
+msgstr ""
+"Reduce el espacio alrededor de los separadores para un reloj más estrecho"
 
 #: src/prefs/generalPage.js
 msgid "24-Hour Format"

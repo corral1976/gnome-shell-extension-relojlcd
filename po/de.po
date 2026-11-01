@@ -5,10 +5,11 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: Retro LCD 7-Segment Clock 84\n"
-"Report-Msgid-Bugs-To: https://gitlab.com/corral1976/gnome-shell-extension-relojlcd/-/issues\n"
-"POT-Creation-Date: 2026-10-11 22:34+0000\n"
-"PO-Revision-Date: 2026-10-04 23:03+0000\n"
+"Project-Id-Version: Retro LCD 7-Segment Clock 86\n"
+"Report-Msgid-Bugs-To: https://gitlab.com/corral1976/gnome-shell-extension-"
+"relojlcd/-/issues\n"
+"POT-Creation-Date: 2026-11-01 03:49+0000\n"
+"PO-Revision-Date: 2026-11-01 03:49+0000\n"
 "Last-Translator: Carlos Corral\n"
 "Language-Team: German\n"
 "Language: de\n"
@@ -16,6 +17,10 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/alarm/alarmManager.js
+msgid "Missed alarm"
+msgstr "Verpasster Alarm"
 
 #: src/alarm/alarmManager.js src/prefs/alarmsPage.js src/ui/alarmDialog.js
 msgid "Alarm"
@@ -89,8 +94,8 @@ msgstr "Zurücksetzen"
 
 #: src/prefs/aboutPage.js
 msgid ""
-"Restore appearance and clock settings to their defaults. Your alarms are not"
-" affected."
+"Restore appearance and clock settings to their defaults. Your alarms are not "
+"affected."
 msgstr ""
 "Setzt die Darstellungs- und Uhreinstellungen auf die Standardwerte zurück. "
 "Die Alarme sind nicht betroffen."
@@ -186,8 +191,8 @@ msgid ""
 "Show a dialog instead of a notification when an alarm rings, so it is not "
 "missed if notifications are silenced"
 msgstr ""
-"Zeigt bei einem Alarm einen Dialog statt einer Benachrichtigung an, damit er"
-" nicht verpasst wird, wenn Benachrichtigungen stummgeschaltet sind"
+"Zeigt bei einem Alarm einen Dialog statt einer Benachrichtigung an, damit er "
+"nicht verpasst wird, wenn Benachrichtigungen stummgeschaltet sind"
 
 #: src/prefs/appearancePage.js
 msgid "Appearance"
@@ -276,8 +281,8 @@ msgid ""
 "Hide the border outline around the display; the background and glow stay "
 "visible"
 msgstr ""
-"Blendet die Rahmenlinie um die Anzeige aus; Hintergrund und Leuchten bleiben"
-" sichtbar"
+"Blendet die Rahmenlinie um die Anzeige aus; Hintergrund und Leuchten bleiben "
+"sichtbar"
 
 #: src/prefs/appearancePage.js
 msgid "Font & Effects"
@@ -328,8 +333,8 @@ msgid ""
 "Draw the digits at the native screen resolution. Turn off for a softer, "
 "retro look on high-resolution screens. No effect on screens without scaling"
 msgstr ""
-"Zeichnet die Ziffern in der nativen Bildschirmauflösung. Für einen weicheren"
-" Retro-Look auf hochauflösenden Bildschirmen ausschalten. Keine Wirkung auf "
+"Zeichnet die Ziffern in der nativen Bildschirmauflösung. Für einen weicheren "
+"Retro-Look auf hochauflösenden Bildschirmen ausschalten. Keine Wirkung auf "
 "Bildschirmen ohne Skalierung"
 
 #: src/prefs/appearancePage.js
@@ -421,6 +426,14 @@ msgstr ""
 "Kompaktes Layout (Glocke, Stunden und Minuten untereinander, ohne Sekunden "
 "und Datum) für ein Panel am linken oder rechten Bildschirmrand. Wird im "
 "Desktop-Widget-Modus nicht verwendet."
+
+#: src/prefs/generalPage.js
+msgid "Condensed Mode"
+msgstr "Schmaler Modus"
+
+#: src/prefs/generalPage.js
+msgid "Tighten the spacing around the separators for a narrower clock"
+msgstr "Verringert den Abstand um die Trennzeichen für eine schmalere Uhr"
 
 #: src/prefs/generalPage.js
 msgid "24-Hour Format"

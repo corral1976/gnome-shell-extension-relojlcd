@@ -41,6 +41,9 @@ export function buildGeneralPage(settings, links) {
         _('Compact layout (bell, hours, minutes stacked, no seconds or date) for a panel docked to the left or right edge of the screen. Not used in desktop widget mode.'));
     settings.bind('is-widget', verticalLayoutRow, 'sensitive',
         Gio.SettingsBindFlags.GET | Gio.SettingsBindFlags.INVERT_BOOLEAN);
+    addSwitchRow(settings, behaviorGroup, 'condensed-mode',
+        _('Condensed Mode'),
+        _('Tighten the spacing around the separators for a narrower clock'));
     addSwitchRow(settings, behaviorGroup, 'clock-format-24h',
         _('24-Hour Format'),
         _('Display time in 24-hour format instead of AM/PM'));

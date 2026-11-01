@@ -1,6 +1,10 @@
 import { GLYPHS, GLYPH_VIEWBOX_HEIGHT } from './svgData.js';
 
 const SPACE_ADVANCE_KEY = ':';
+const DIGIT_ADVANCE_KEY = '8';
+const ALARM_ICON_GAP_RATIO = 0.15;
+
+export const DIGIT_BLANK = '\u2007';
 
 const BASE_FONT_PT = 11;
 const PT_TO_PX = 96 / 72;
@@ -21,7 +25,12 @@ export function isKnownGlyph(char) {
 }
 
 export function isBlankGlyph(char) {
-    return char === ' ' || char === '\n';
+    return char === ' ' || char === '\n' || char === DIGIT_BLANK;
+}
+
+function resolveAdvanceKey(char) {
+    if (char === DIGIT_BLANK) return DIGIT_ADVANCE_KEY;
+    return isBlankGlyph(char) ? SPACE_ADVANCE_KEY : char;
 }
 
 function calculateItalicPad(glyph) {
@@ -30,7 +39,7 @@ function calculateItalicPad(glyph) {
 }
 
 export function getGlyphAspectRatio(char, italic = false) {
-    const glyph = GLYPHS[isBlankGlyph(char) ? SPACE_ADVANCE_KEY : char];
+    const glyph = GLYPHS[resolveAdvanceKey(char)];
     if (!glyph) return null;
     const width = italic ? glyph.viewBoxWidth + 2 * calculateItalicPad(glyph) : glyph.viewBoxWidth;
     return width / GLYPH_VIEWBOX_HEIGHT;
@@ -195,6 +204,10 @@ const ITALIC_COLON_WIDTH_RATIO = 0.67;
 
 export function calculateCellPixelHeight(fontSize) {
     return BASE_FONT_PT * PT_TO_PX * fontSize;
+}
+
+export function calculateAlarmIconGap(fontSize) {
+    return calculateCellPixelWidth(fontSize, DIGIT_ADVANCE_KEY) * ALARM_ICON_GAP_RATIO;
 }
 
 export function calculateCellPixelWidth(fontSize, char, italic = false) {

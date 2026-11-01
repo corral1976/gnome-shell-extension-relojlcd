@@ -10,7 +10,7 @@ export class Clock {
     #textureCache;
     #view = null;
 
-    constructor(extension) {
+    constructor(extension, alarmCarryover) {
         this.#extension = extension;
         this.#settings = extension.getSettings();
         this.#textureCache = new GlyphTextureCache();
@@ -31,6 +31,11 @@ export class Clock {
 
         this.#view.runLampTest();
         notifyIfUpdated(this.#settings, extension.metadata);
+        if (alarmCarryover) this.#alarmManager.restore(alarmCarryover);
+    }
+
+    getAlarmCarryover() {
+        return this.#alarmManager.getCarryover();
     }
 
     destroy() {

@@ -5,10 +5,11 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: Retro LCD 7-Segment Clock 84\n"
-"Report-Msgid-Bugs-To: https://gitlab.com/corral1976/gnome-shell-extension-relojlcd/-/issues\n"
-"POT-Creation-Date: 2026-10-11 22:34+0000\n"
-"PO-Revision-Date: 2026-10-04 23:03+0000\n"
+"Project-Id-Version: Retro LCD 7-Segment Clock 86\n"
+"Report-Msgid-Bugs-To: https://gitlab.com/corral1976/gnome-shell-extension-"
+"relojlcd/-/issues\n"
+"POT-Creation-Date: 2026-11-01 03:49+0000\n"
+"PO-Revision-Date: 2026-11-01 03:49+0000\n"
 "Last-Translator: Carlos Corral\n"
 "Language-Team: French\n"
 "Language: fr\n"
@@ -16,6 +17,10 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#: src/alarm/alarmManager.js
+msgid "Missed alarm"
+msgstr "Alarme manquée"
 
 #: src/alarm/alarmManager.js src/prefs/alarmsPage.js src/ui/alarmDialog.js
 msgid "Alarm"
@@ -89,8 +94,8 @@ msgstr "Réinitialiser"
 
 #: src/prefs/aboutPage.js
 msgid ""
-"Restore appearance and clock settings to their defaults. Your alarms are not"
-" affected."
+"Restore appearance and clock settings to their defaults. Your alarms are not "
+"affected."
 msgstr ""
 "Rétablit les paramètres d’apparence et de l’horloge à leurs valeurs par "
 "défaut. Les alarmes ne sont pas affectées."
@@ -328,8 +333,8 @@ msgid ""
 "Draw the digits at the native screen resolution. Turn off for a softer, "
 "retro look on high-resolution screens. No effect on screens without scaling"
 msgstr ""
-"Dessine les chiffres à la résolution native de l’écran. À désactiver pour un"
-" aspect rétro plus doux sur les écrans haute résolution. Sans effet sur les "
+"Dessine les chiffres à la résolution native de l’écran. À désactiver pour un "
+"aspect rétro plus doux sur les écrans haute résolution. Sans effet sur les "
 "écrans sans mise à l’échelle"
 
 #: src/prefs/appearancePage.js
@@ -419,8 +424,16 @@ msgid ""
 "widget mode."
 msgstr ""
 "Disposition compacte (cloche, heures et minutes empilées, sans secondes ni "
-"date) pour un panneau ancré au bord gauche ou droit de l’écran. Non utilisée"
-" en mode widget de bureau."
+"date) pour un panneau ancré au bord gauche ou droit de l’écran. Non utilisée "
+"en mode widget de bureau."
+
+#: src/prefs/generalPage.js
+msgid "Condensed Mode"
+msgstr "Mode condensé"
+
+#: src/prefs/generalPage.js
+msgid "Tighten the spacing around the separators for a narrower clock"
+msgstr "Réduit l’espace autour des séparateurs pour une horloge plus étroite"
 
 #: src/prefs/generalPage.js
 msgid "24-Hour Format"
@@ -454,8 +467,8 @@ msgstr "Afficher la date au survol"
 msgid ""
 "Show the full date in a small tooltip when the pointer rests over the clock"
 msgstr ""
-"Affiche la date complète dans une petite infobulle lorsque le pointeur reste"
-" sur l’horloge"
+"Affiche la date complète dans une petite infobulle lorsque le pointeur reste "
+"sur l’horloge"
 
 #: src/prefs/generalPage.js
 msgid "Date Order"

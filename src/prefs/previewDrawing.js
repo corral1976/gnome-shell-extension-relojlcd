@@ -126,7 +126,7 @@ export function drawGlyphRow(cr, cache, text, color, fontSize, styleOptions, sta
 
 export function drawAlarmIcon(cr, cache, slotX, centerY, slotWidth, fontSize, colors, glowValue, isRetro, styleOptions, scale = 1) {
     const iconOptions = { ...styleOptions, bold: true };
-    const iconWidth = calculateCellPixelWidth(fontSize, 'alarm');
+    const iconWidth = calculateCellPixelWidth(fontSize, 'alarm', styleOptions.italic);
     const iconX = slotX + (slotWidth - iconWidth) / 2;
 
     if (isRetro && glowValue >= 1) {

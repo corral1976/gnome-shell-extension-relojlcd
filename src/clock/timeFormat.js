@@ -1,3 +1,6 @@
+import { DIGIT_BLANK } from '../shared/glyphAssets.js';
+import { buildDateDivider, buildSeparator } from '../shared/timeLayout.js';
+
 const DATE_FORMATS = {
     dmy: '%d-%m-%Y',
     mdy: '%m-%d-%Y',
@@ -14,33 +17,31 @@ export function calculateTickDelayMs(microsecond, blink) {
     return intervalMs - elapsedMs + CLOCK_TICK_MARGIN_MS;
 }
 
-export function formatTime(now, { is24h, showSeconds, showDate, isWidget, compact }, blink, dateFormat) {
-    if (compact) {
-        const format = is24h ? '%H\n%M' : '%I\n%M';
-        return now.format(format);
-    }
+function formatHour(now, is24h) {
+    if (is24h) return now.format('%H');
+
+    const hour = now.get_hour() % 12 || 12;
+    return hour < 10 ? `${DIGIT_BLANK}${hour}` : `${hour}`;
+}
+
+export function formatTime(now, { is24h, showSeconds, showDate, isWidget, compact, condensed }, blink, dateFormat) {
+    const hour = formatHour(now, is24h);
+    if (compact) return `${hour}\n${now.format('%M')}`;
 
     const separatorOn = !blink || now.get_microsecond() < BLINK_ON_MICROSECONDS;
-    const sepChar = separatorOn ? ':' : ' ';
-    const sep = ` ${sepChar} `;
+    const separator = buildSeparator(separatorOn ? ':' : ' ', condensed);
 
-    const meridiem = now.get_hour() < 12 ? 'AM' : 'PM';
-
-    let timeStr;
-    if (showSeconds) {
-        const format = is24h ? `%H${sep}%M${sep}%S` : `%I${sep}%M${sep}%S ${meridiem}`;
-        timeStr = now.format(format);
-    } else {
-        const format = is24h ? `%H${sep}%M` : `%I${sep}%M ${meridiem}`;
-        timeStr = now.format(format);
-    }
+    const units = [hour, now.format('%M')];
+    if (showSeconds) units.push(now.format('%S'));
+    let timeStr = units.join(separator);
+    if (!is24h) timeStr += ` ${now.get_hour() < 12 ? 'AM' : 'PM'}`;
 
     if (showDate) {
         const dateStr = now.format(DATE_FORMATS[dateFormat]);
         if (isWidget) {
             timeStr = `${timeStr}\n${dateStr}`;
         } else {
-            timeStr = `${timeStr}  --  ${dateStr}`;
+            timeStr = `${timeStr}${buildDateDivider(condensed)}${dateStr}`;
         }
     }
 

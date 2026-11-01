@@ -1,7 +1,7 @@
 # Retro LCD 7-Segment Clock & Widget
 
-[![GitHub release](https://img.shields.io/github/v/release/corral1976/gnome-shell-extension-relojlcd)](https://github.com/corral1976/gnome-shell-extension-relojlcd/releases)
-[![build](https://img.shields.io/github/actions/workflow/status/corral1976/gnome-shell-extension-relojlcd/main.yml?style=flat&label=build&labelColor=282828&color=2ea44f&logo=githubactions&logoColor=fbf1c7&logoSize=auto)](https://github.com/corral1976/gnome-shell-extension-relojlcd/actions)
+[![GitLab release](https://img.shields.io/gitlab/v/release/corral1976%2Fgnome-shell-extension-relojlcd)](https://gitlab.com/corral1976/gnome-shell-extension-relojlcd/-/releases)
+[![pipeline status](https://gitlab.com/corral1976/gnome-shell-extension-relojlcd/badges/main/pipeline.svg)](https://gitlab.com/corral1976/gnome-shell-extension-relojlcd/-/commits/main)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 GNOME Shell extension that shows a retro digital LCD-style clock in the top panel, or as a floating widget on the desktop.
@@ -49,6 +49,8 @@ Repository mirrors: [GitLab](https://gitlab.com/corral1976/gnome-shell-extension
 - Toggleable display border: hide just the outline, keeping the background and glow
 - Date on hover: rest the pointer over the clock and a small tooltip shows today's full date, in your language and in the clock's current colors (can be turned off in Preferences)
 - Quick color menu: click the panel indicator for instant theme switching without opening full Preferences
+- Condensed mode: closes the gaps around the separators and shortens the date divider, for a narrower clock
+- Missed-alarm notice: GNOME turns extensions off while the screen is locked, so if an alarm comes due during a lock you get a notification when you unlock (alarms up to 30 minutes old; snoozes that were waiting are kept)
 - Update notice: a one-time notification (with the extension's icon) lets you know when it has updated to a new version
 
 ---
@@ -175,6 +177,7 @@ relojlcd@carlos/
 │   │   ├── dateTooltip.js
 │   │   ├── indicator.js
 │   │   ├── sevenSegmentRow.js
+│   │   ├── systemNotification.js
 │   │   └── alarmDialog.js
 │   ├── alarm/
 │   │   └── alarmManager.js
@@ -193,6 +196,7 @@ relojlcd@carlos/
 │       ├── glyphAssets.js
 │       ├── colorUtils.js
 │       ├── renderMath.js
+│       ├── timeLayout.js
 │       └── alarmSound.js
 ├── schemas/
 │   ├── org.gnome.shell.extensions.relojlcd.gschema.xml
@@ -262,6 +266,7 @@ If you like the extension and want to help keep it maintained:
   Because the glyph shapes are still a derivative of DSEG7, the font's **SIL Open Font
   License 1.1** (see `DSEG-LICENSE.txt`) applies to them and is bundled alongside the
   code, as the OFL requires for derivative works.
+- The alarm bell glyph is original artwork drawn for this project and is covered by the MIT License.
 - The alarm sound is played from GNOME Shell's own system sound theme, not from a file
   bundled with the extension, so no separate audio license applies.
 - The translations in `po/` are part of the project and use the same MIT License.

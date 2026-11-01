@@ -148,6 +148,7 @@ export class DisplayEffects {
             this.#alarmBlinkState = !this.#alarmBlinkState;
             const opacity = this.#alarmBlinkState ? 255 : ALARM_BLINK_DIM_OPACITY;
             this.#display.clockLabel.set_opacity(opacity);
+            this.#display.shadowLabel.set_opacity(opacity);
             this.#display.alarmDotWrapper.set_opacity(opacity);
             return GLib.SOURCE_CONTINUE;
         });

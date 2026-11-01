@@ -3,10 +3,13 @@ import GLib from 'gi://GLib';
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import { gettext as _ } from 'resource:///org/gnome/shell/extensions/extension.js';
 import { AlarmDialog } from '../ui/alarmDialog.js';
+import { notifySystem } from '../ui/systemNotification.js';
 import { ALARM_SOUND_DURATION_MS } from '../shared/alarmSound.js';
 
 const ALARM_AUTO_STOP_MS = 60000;
 const SECONDS_PER_MINUTE = 60;
+const MICROSECONDS_PER_SECOND = 1000000;
+const MISSED_ALARM_WINDOW_SECONDS = 1800;
 
 export class AlarmManager {
     #settings;
@@ -17,6 +20,7 @@ export class AlarmManager {
     #lastAlarmStamps = new Map();
     #pendingAlarms = [];
     #snoozeTimeoutIds = new Map();
+    #snoozeDueTimes = new Map();
     #activeNotification = null;
     #alarmDialog = null;
     #lastCheckedTime = null;
@@ -50,6 +54,39 @@ export class AlarmManager {
         return this.#alarms.some(alarm => alarm.enabled);
     }
 
+    getCarryover() {
+        return {
+            disabledAt: GLib.get_real_time(),
+            snoozes: [...this.#snoozeDueTimes].map(([alarmId, dueAt]) => ({ alarmId, dueAt }))
+        };
+    }
+
+    restore({ disabledAt, snoozes }) {
+        const now = GLib.DateTime.new_now_local();
+
+        for (const alarm of this.#alarms) {
+            if (!alarm.enabled) continue;
+
+            const missedTarget = this.#findMissedTarget(alarm, disabledAt, now);
+            if (!missedTarget) continue;
+
+            this.#lastAlarmStamps.set(alarm.id, this.#buildStamp(missedTarget, alarm));
+            if (alarm.year !== undefined) this.#disableOneTimeAlarm(alarm);
+            this.#notifyMissedAlarm(alarm, missedTarget);
+        }
+
+        for (const { alarmId, dueAt } of snoozes) {
+            const alarm = this.#alarms.find(candidate => candidate.id === alarmId);
+            if (!alarm || !this.#canRing(alarm)) continue;
+
+            const remainingSeconds = Math.ceil((dueAt - GLib.get_real_time()) / MICROSECONDS_PER_SECOND);
+            if (remainingSeconds > 0)
+                this.#startSnoozeTimer(alarmId, remainingSeconds);
+            else if (-remainingSeconds <= MISSED_ALARM_WINDOW_SECONDS)
+                this.#notifyMissedAlarm(alarm, GLib.DateTime.new_from_unix_local(Math.floor(dueAt / MICROSECONDS_PER_SECOND)));
+        }
+    }
+
     destroy() {
         this.#settings.disconnectObject(this);
         this.#haltRinging();
@@ -58,6 +95,7 @@ export class AlarmManager {
         for (const timeoutId of this.#snoozeTimeoutIds.values())
             GLib.Source.remove(timeoutId);
         this.#snoozeTimeoutIds.clear();
+        this.#snoozeDueTimes.clear();
 
         this.#alarms = [];
         this.#pendingAlarms = [];
@@ -91,7 +129,7 @@ export class AlarmManager {
 
             if (!reachedTarget) continue;
 
-            const stamp = `${now.get_year()}-${now.get_day_of_year()}-${alarm.hour}:${alarm.minute}`;
+            const stamp = this.#buildStamp(now, alarm);
             if (this.#lastAlarmStamps.get(alarm.id) === stamp) continue;
             this.#lastAlarmStamps.set(alarm.id, stamp);
 
@@ -112,6 +150,34 @@ export class AlarmManager {
 
         if (this.#pendingAlarms.length)
             this.#triggerAlarm(this.#pendingAlarms.shift());
+    }
+
+    #buildStamp(date, alarm) {
+        return `${date.get_year()}-${date.get_day_of_year()}-${alarm.hour}:${alarm.minute}`;
+    }
+
+    #canRing(alarm) {
+        return alarm.enabled || alarm.year !== undefined;
+    }
+
+    #findMissedTarget(alarm, disabledAt, now) {
+        const targets = alarm.year !== undefined
+            ? [GLib.DateTime.new_local(alarm.year, alarm.month, alarm.day, alarm.hour, alarm.minute, 0)]
+            : [now, now.add_days(-1)].map(day =>
+                GLib.DateTime.new_local(day.get_year(), day.get_month(), day.get_day_of_month(), alarm.hour, alarm.minute, 0));
+
+        return targets.find(target => {
+            const lateBySeconds = now.to_unix() - target.to_unix();
+            return target.to_unix() * MICROSECONDS_PER_SECOND > disabledAt &&
+                lateBySeconds >= SECONDS_PER_MINUTE && lateBySeconds <= MISSED_ALARM_WINDOW_SECONDS;
+        }) ?? null;
+    }
+
+    #notifyMissedAlarm(alarm, target) {
+        notifySystem({
+            title: _('Missed alarm'),
+            body: `${alarm.label || _('Alarm')}  ·  ${target.format('%H:%M')}`
+        });
     }
 
     #parseAlarms() {
@@ -139,7 +205,7 @@ export class AlarmManager {
     }
 
     #disableOneTimeAlarm(alarm) {
-        alarm.enabled = false;
+        this.#alarms.find(candidate => candidate.id === alarm.id).enabled = false;
         this.#settings.set_string('alarms', JSON.stringify(this.#alarms));
     }
 
@@ -191,16 +257,15 @@ export class AlarmManager {
     }
 
     #showAlarmNotification(alarm) {
-        const source = MessageTray.getSystemSource();
-        const notification = new MessageTray.Notification({
-            source,
+        const notification = notifySystem({
             title: this.#title,
             body: alarm.label || _('Alarm'),
-            urgency: MessageTray.Urgency.CRITICAL
+            urgency: MessageTray.Urgency.CRITICAL,
+            actions: [
+                { label: _('Snooze'), callback: () => this.#snoozeAlarm(alarm) },
+                { label: _('Dismiss'), callback: () => this.stopRinging() }
+            ]
         });
-
-        notification.addAction(_('Snooze'), () => this.#snoozeAlarm(alarm));
-        notification.addAction(_('Dismiss'), () => this.stopRinging());
 
         const destroyHandlerId = notification.connect('destroy', () => {
             notification.disconnect(destroyHandlerId);
@@ -209,7 +274,6 @@ export class AlarmManager {
         });
 
         this.#activeNotification = notification;
-        source.addNotification(notification);
     }
 
     #showAlarmDialog(alarm) {
@@ -230,19 +294,23 @@ export class AlarmManager {
 
     #snoozeAlarm(alarm) {
         this.stopRinging();
+        this.#startSnoozeTimer(alarm.id, this.#settings.get_int('snooze-minutes') * SECONDS_PER_MINUTE);
+    }
 
-        const existingTimeoutId = this.#snoozeTimeoutIds.get(alarm.id);
+    #startSnoozeTimer(alarmId, delaySeconds) {
+        const existingTimeoutId = this.#snoozeTimeoutIds.get(alarmId);
         if (existingTimeoutId) GLib.Source.remove(existingTimeoutId);
 
-        const snoozeMinutes = this.#settings.get_int('snooze-minutes');
-        const timeoutId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, snoozeMinutes * SECONDS_PER_MINUTE, () => {
-            this.#snoozeTimeoutIds.delete(alarm.id);
-            const currentAlarm = this.#alarms.find(candidate => candidate.id === alarm.id);
-            if (currentAlarm && (currentAlarm.enabled || currentAlarm.year !== undefined))
+        this.#snoozeDueTimes.set(alarmId, GLib.get_real_time() + delaySeconds * MICROSECONDS_PER_SECOND);
+        const timeoutId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, delaySeconds, () => {
+            this.#snoozeTimeoutIds.delete(alarmId);
+            this.#snoozeDueTimes.delete(alarmId);
+            const currentAlarm = this.#alarms.find(candidate => candidate.id === alarmId);
+            if (currentAlarm && this.#canRing(currentAlarm))
                 this.#triggerAlarm(currentAlarm);
             return GLib.SOURCE_REMOVE;
         });
-        this.#snoozeTimeoutIds.set(alarm.id, timeoutId);
+        this.#snoozeTimeoutIds.set(alarmId, timeoutId);
     }
 
     #haltRinging() {

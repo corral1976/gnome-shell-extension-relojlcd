@@ -4,8 +4,8 @@ import St from 'gi://St';
 import { gettext as _ } from 'resource:///org/gnome/shell/extensions/extension.js';
 import { calculateRetroShadowOffset, RETRO_SHADOW_RGBA } from '../shared/renderMath.js';
 import {
+    calculateAlarmIconGap,
     calculateCellPixelHeight,
-    calculateCellPixelWidth,
     getGlyphAspectRatio,
     resolveGlyphStyleOptions
 } from '../shared/glyphAssets.js';
@@ -322,7 +322,6 @@ export class ClockDisplay {
 
     #updateAlarmDotAppearance(config, theme) {
         const slotHeight = calculateCellPixelHeight(config.fontSize);
-        const slotWidth = calculateCellPixelWidth(config.fontSize, '8');
         const showGhostShadow = config.colorType === 'gray' && config.glow >= 1;
         const shadowOffset = showGhostShadow ? calculateRetroShadowOffset(config.glow, config.fontSize) : 0;
 
@@ -336,9 +335,9 @@ export class ClockDisplay {
         const rasterWidth = Math.max(iconWidth * this.#rasterScale, ALARM_ICON_MIN_RASTER_SIZE * iconAspect);
         const rasterHeight = Math.max(iconHeight * this.#rasterScale, ALARM_ICON_MIN_RASTER_SIZE);
 
-        this.#alarmDotWrapper.set_size(Math.max(1, Math.round(slotWidth)), Math.max(1, Math.round(slotHeight)));
+        this.#alarmDotWrapper.set_size(iconWidth, iconHeight);
         const marginSide = config.compact ? 'margin-bottom' : 'margin-right';
-        this.#alarmDotWrapper.set_style(`${marginSide}: ${(slotWidth * 0.15).toFixed(1)}px;`);
+        this.#alarmDotWrapper.set_style(`${marginSide}: ${calculateAlarmIconGap(config.fontSize).toFixed(1)}px;`);
 
         this.#alarmDot.set_size(iconWidth, iconHeight);
         this.#alarmDot.set_content(

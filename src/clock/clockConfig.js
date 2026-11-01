@@ -1,5 +1,6 @@
 import { buildCustomTheme, buildTheme, PRESET_COLORS } from '../shared/colorUtils.js';
 import { calculateRetroShadowOffset } from '../shared/renderMath.js';
+import { buildDateDivider, buildSeparator } from '../shared/timeLayout.js';
 
 export const COMPACT_HORIZONTAL_PADDING = 3;
 
@@ -28,22 +29,19 @@ export function readLayoutFlags(settings) {
         compact,
         showSeconds: compact ? false : settings.get_boolean('show-seconds'),
         showDate: compact ? false : settings.get_boolean('show-date'),
-        is24h: settings.get_boolean('clock-format-24h')
+        is24h: settings.get_boolean('clock-format-24h'),
+        condensed: settings.get_boolean('condensed-mode')
     };
 }
 
-export function getPlaceholderText({ showSeconds, showDate, isWidget, is24h, compact }) {
+export function getPlaceholderText({ showSeconds, showDate, isWidget, is24h, compact, condensed }) {
     if (compact) return '88\n88';
 
-    let timeText = showSeconds ? '88 : 88 : 88' : '88 : 88';
+    const units = showSeconds ? ['88', '88', '88'] : ['88', '88'];
+    let timeText = units.join(buildSeparator(':', condensed));
     if (!is24h) timeText += ' 88';
-    if (showDate) {
-        if (isWidget) {
-            timeText += '\n88-88-8888';
-        } else {
-            timeText += '  --  88-88-8888';
-        }
-    }
+    if (showDate)
+        timeText += isWidget ? '\n88-88-8888' : `${buildDateDivider(condensed)}88-88-8888`;
     return timeText;
 }
 

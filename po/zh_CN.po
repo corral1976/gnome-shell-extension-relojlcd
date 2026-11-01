@@ -5,10 +5,11 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: Retro LCD 7-Segment Clock 84\n"
-"Report-Msgid-Bugs-To: https://gitlab.com/corral1976/gnome-shell-extension-relojlcd/-/issues\n"
-"POT-Creation-Date: 2026-10-11 22:34+0000\n"
-"PO-Revision-Date: 2026-10-04 23:03+0000\n"
+"Project-Id-Version: Retro LCD 7-Segment Clock 86\n"
+"Report-Msgid-Bugs-To: https://gitlab.com/corral1976/gnome-shell-extension-"
+"relojlcd/-/issues\n"
+"POT-Creation-Date: 2026-11-01 03:49+0000\n"
+"PO-Revision-Date: 2026-11-01 03:49+0000\n"
 "Last-Translator: Carlos Corral\n"
 "Language-Team: Chinese (Simplified)\n"
 "Language: zh_CN\n"
@@ -16,6 +17,10 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
+
+#: src/alarm/alarmManager.js
+msgid "Missed alarm"
+msgstr "错过的闹钟"
 
 #: src/alarm/alarmManager.js src/prefs/alarmsPage.js src/ui/alarmDialog.js
 msgid "Alarm"
@@ -89,8 +94,8 @@ msgstr "重置"
 
 #: src/prefs/aboutPage.js
 msgid ""
-"Restore appearance and clock settings to their defaults. Your alarms are not"
-" affected."
+"Restore appearance and clock settings to their defaults. Your alarms are not "
+"affected."
 msgstr "将外观和时钟设置恢复为默认值。闹钟不受影响。"
 
 #: src/prefs/aboutPage.js
@@ -315,7 +320,9 @@ msgstr "清晰数字 (HiDPI)"
 msgid ""
 "Draw the digits at the native screen resolution. Turn off for a softer, "
 "retro look on high-resolution screens. No effect on screens without scaling"
-msgstr "以屏幕原生分辨率绘制数字。在高分辨率屏幕上关闭可获得更柔和的复古效果。对未缩放的屏幕无效"
+msgstr ""
+"以屏幕原生分辨率绘制数字。在高分辨率屏幕上关闭可获得更柔和的复古效果。对未缩"
+"放的屏幕无效"
 
 #: src/prefs/appearancePage.js
 msgid "Blinking Separators"
@@ -398,7 +405,17 @@ msgid ""
 "Compact layout (bell, hours, minutes stacked, no seconds or date) for a "
 "panel docked to the left or right edge of the screen. Not used in desktop "
 "widget mode."
-msgstr "紧凑布局（铃铛、小时和分钟纵向堆叠，不显示秒和日期），适用于停靠在屏幕左侧或右侧边缘的面板。在桌面小部件模式下不使用。"
+msgstr ""
+"紧凑布局（铃铛、小时和分钟纵向堆叠，不显示秒和日期），适用于停靠在屏幕左侧或"
+"右侧边缘的面板。在桌面小部件模式下不使用。"
+
+#: src/prefs/generalPage.js
+msgid "Condensed Mode"
+msgstr "窄体模式"
+
+#: src/prefs/generalPage.js
+msgid "Tighten the spacing around the separators for a narrower clock"
+msgstr "缩小分隔符周围的间距，使时钟更窄"
 
 #: src/prefs/generalPage.js
 msgid "24-Hour Format"

@@ -60,6 +60,7 @@ export class ClockView {
             'changed::show-date', () => { this.#updateClock(); this.#updateStyle(); },
             'changed::date-format', () => this.#updateClock(),
             'changed::vertical-panel-layout', () => { this.#updateClock(); this.#updateStyle(); },
+            'changed::condensed-mode', () => { this.#updateClock(); this.#updateStyle(); },
             'changed::blink-dots', () => this.#updateClock(),
             'changed::clock-format-24h', () => { this.#updateClock(); this.#updateStyle(); },
             'changed::flicker-enabled', () => this.#effects.updateFlicker(),
@@ -135,6 +136,7 @@ export class ClockView {
 
         this.#effects.stopAlarmBlink();
         this.#display.clockLabel.set_opacity(255);
+        this.#display.shadowLabel.set_opacity(255);
         this.#updateStyle();
         this.#display.alarmDotWrapper.set_opacity(255);
         this.#effects.updateFlicker();
