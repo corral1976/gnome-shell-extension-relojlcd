@@ -69,3 +69,4 @@ jobs:
       - name: Download Artifact
         uses: actions/download-artifact@v7
         with:
+          name: extension-package
