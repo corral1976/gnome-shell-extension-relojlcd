@@ -123,7 +123,7 @@ export function buildAlarmsPage(settings, window, links, refreshPreview) {
             wrap: true
         });
         const yearSpin = new Gtk.SpinButton({
-            adjustment: new Gtk.Adjustment({ lower: today.get_year(), upper: today.get_year() + 20, step_increment: 1, value: initialYear }),
+            adjustment: new Gtk.Adjustment({ lower: Math.min(today.get_year(), alarm.year ?? today.get_year()), upper: today.get_year() + 20, step_increment: 1, value: initialYear }),
             valign: Gtk.Align.CENTER
         });
         dateRow.add_suffix(daySpin);

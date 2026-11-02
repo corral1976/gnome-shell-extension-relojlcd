@@ -19,7 +19,7 @@ export function buildGeneralPage(settings, links) {
     page.add(dateGroup);
 
     const dateLabel = new Gtk.Label({
-        label: GLib.DateTime.new_now_local().format('%A, %d %B %Y'),
+        label: GLib.DateTime.new_now_local().format(_('%A, %-d %B %Y')),
         halign: Gtk.Align.CENTER,
         margin_top: 4,
         margin_bottom: 10,

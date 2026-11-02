@@ -5,10 +5,10 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: Retro LCD 7-Segment Clock 86\n"
+"Project-Id-Version: Retro LCD 7-Segment Clock 87\n"
 "Report-Msgid-Bugs-To: https://gitlab.com/corral1976/gnome-shell-extension-"
 "relojlcd/-/issues\n"
-"POT-Creation-Date: 2026-11-01 03:49+0000\n"
+"POT-Creation-Date: 2026-11-02 21:23+0000\n"
 "PO-Revision-Date: 2026-11-01 03:49+0000\n"
 "Last-Translator: Carlos Corral\n"
 "Language-Team: German\n"
@@ -397,6 +397,10 @@ msgstr "Allgemein"
 msgid "Current Date"
 msgstr "Aktuelles Datum"
 
+#: src/prefs/generalPage.js src/ui/dateTooltip.js
+msgid "%A, %-d %B %Y"
+msgstr "%A, %-d. %B %Y"
+
 #: src/prefs/generalPage.js
 msgid "Clock Behavior"
 msgstr "Verhalten der Uhr"
@@ -517,10 +521,6 @@ msgstr "Live-Vorschau"
 #: src/ui/clockDisplay.js
 msgid "Alarm active"
 msgstr "Alarm aktiv"
-
-#: src/ui/dateTooltip.js
-msgid "%A, %-d %B %Y"
-msgstr "%A, %-d. %B %Y"
 
 #: src/ui/indicator.js
 msgid "More Settings…"

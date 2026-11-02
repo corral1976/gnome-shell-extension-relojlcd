@@ -306,8 +306,12 @@ export class AlarmManager {
             this.#snoozeTimeoutIds.delete(alarmId);
             this.#snoozeDueTimes.delete(alarmId);
             const currentAlarm = this.#alarms.find(candidate => candidate.id === alarmId);
-            if (currentAlarm && this.#canRing(currentAlarm))
-                this.#triggerAlarm(currentAlarm);
+            if (currentAlarm && this.#canRing(currentAlarm)) {
+                if (!this.#isRinging)
+                    this.#triggerAlarm(currentAlarm);
+                else if (!this.#pendingAlarms.some(pending => pending.id === currentAlarm.id))
+                    this.#pendingAlarms.push(currentAlarm);
+            }
             return GLib.SOURCE_REMOVE;
         });
         this.#snoozeTimeoutIds.set(alarmId, timeoutId);
