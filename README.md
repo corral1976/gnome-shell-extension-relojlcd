@@ -50,7 +50,7 @@ Repository mirrors: [GitLab](https://gitlab.com/corral1976/gnome-shell-extension
 - Date on hover: rest the pointer over the clock and a small tooltip shows today's full date, in your language and in the clock's current colors (can be turned off in Preferences)
 - Quick color menu: click the panel indicator for instant theme switching without opening full Preferences
 - Condensed mode: closes the gaps around the separators and shortens the date divider, for a narrower clock
-- Missed-alarm notice: GNOME turns extensions off while the screen is locked, so if an alarm comes due during a lock you get a notification when you unlock (alarms up to 30 minutes old; snoozes that were waiting are kept)
+- Missed-alarm notice: GNOME turns extensions off while the screen is locked, so if an alarm comes due during a lock you get a notification when you unlock (alarms up to 30 minutes old; snoozes that were waiting are kept). The same notice appears if the clock jumps more than a minute past an alarm's time, for example after waking from suspend
 - Update notice: a one-time notification (with the extension's icon) lets you know when it has updated to a new version
 
 ---
@@ -104,6 +104,7 @@ Linux needs a quick "refresh" before it will notice the new extension. How you d
 
 - **If you're on X11:** press `Alt+F2`, type `r`, and press Enter. The screen will flicker briefly — that's normal.
 - **If you're on Wayland:** X11's shortcut doesn't work here, so you'll need to log out and log back in instead.
+- **If you're on GNOME 50 or later:** these versions no longer have an X11 session, so you always need to log out and log back in.
 
 > Not sure which one you're using? It's fine — if `Alt+F2` doesn't do anything, that just means you're on Wayland, so simply log out and back in.
 
@@ -131,8 +132,8 @@ inspector) for anything mentioning `relojlcd`. If a single digit can't be drawn,
 running and that digit stays blank; the logs will show one `Failed to rasterize glyph` line for it.
 
 **1. Restart GNOME Shell (or log out and back in).** On X11: `Alt+F2`, type `r`, Enter. On
-Wayland: log out and log back in (the X11 shortcut won't do anything, so that's the sign
-you're on Wayland).
+Wayland (and always on GNOME 50 or later, which has no X11 session): log out and log back in
+(the X11 shortcut won't do anything, so that's the sign you're on Wayland).
 
 **2. Turn the extension off and back on** in the Extensions app (`gnome-extensions-app`)
 after restarting.
@@ -197,7 +198,8 @@ relojlcd@carlos/
 │       ├── colorUtils.js
 │       ├── renderMath.js
 │       ├── timeLayout.js
-│       └── alarmSound.js
+│       ├── alarmSound.js
+│       └── alarmState.js
 ├── schemas/
 │   ├── org.gnome.shell.extensions.relojlcd.gschema.xml
 │   └── gschemas.compiled  (auto-generated, don't commit it)

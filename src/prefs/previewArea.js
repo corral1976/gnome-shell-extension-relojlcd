@@ -9,6 +9,7 @@ import {
     calculateRowPixelWidth,
     resolveGlyphStyleOptions
 } from '../shared/glyphAssets.js';
+import { isAlarmPending } from '../shared/alarmState.js';
 import { buildSeparator } from '../shared/timeLayout.js';
 import { drawAlarmIcon, drawGlyphRow, drawPreviewChrome, getPreviewColors } from './previewDrawing.js';
 import { parseAlarms } from './prefsHelpers.js';
@@ -29,14 +30,15 @@ export function createPreview(settings, links) {
     const computePreviewLayout = () => {
         const fontSize = Math.min(settings.get_double('font-size'), PREVIEW_MAX_FONT_SIZE);
         const styleOptions = resolveGlyphStyleOptions(settings.get_string('font-style'));
-        const hasEnabledAlarm = parseAlarms(settings.get_string('alarms')).some(alarm => alarm.enabled);
+        const nowMs = Date.now();
+        const hasPendingAlarm = parseAlarms(settings.get_string('alarms')).some(alarm => isAlarmPending(alarm, nowMs));
         const previewText = ['88', '88'].join(buildSeparator(':', settings.get_boolean('condensed-mode')));
         const cellHeight = calculateCellPixelHeight(fontSize);
         const rowWidth = calculateRowPixelWidth(fontSize, previewText, styleOptions.italic);
-        const alarmSlotWidth = hasEnabledAlarm ? calculateCellPixelWidth(fontSize, 'alarm', styleOptions.italic) : 0;
-        const alarmMargin = hasEnabledAlarm ? calculateAlarmIconGap(fontSize) : 0;
+        const alarmSlotWidth = hasPendingAlarm ? calculateCellPixelWidth(fontSize, 'alarm', styleOptions.italic) : 0;
+        const alarmMargin = hasPendingAlarm ? calculateAlarmIconGap(fontSize) : 0;
         return {
-            fontSize, styleOptions, hasEnabledAlarm, previewText, cellHeight, rowWidth, alarmSlotWidth, alarmMargin,
+            fontSize, styleOptions, hasPendingAlarm, previewText, cellHeight, rowWidth, alarmSlotWidth, alarmMargin,
             totalWidth: alarmSlotWidth + alarmMargin + rowWidth
         };
     };
@@ -55,7 +57,7 @@ export function createPreview(settings, links) {
         const centerY = height / 2;
         let x = (width - layout.totalWidth) / 2;
 
-        if (layout.hasEnabledAlarm) {
+        if (layout.hasPendingAlarm) {
             drawAlarmIcon(cr, glyphPreviewCache, x, centerY, layout.alarmSlotWidth, layout.fontSize,
                 colors, glowValue, isRetro, layout.styleOptions, scale);
             x += layout.alarmSlotWidth + layout.alarmMargin;

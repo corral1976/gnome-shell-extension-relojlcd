@@ -3,7 +3,7 @@ import GObject from 'gi://GObject';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import { gettext as _ } from 'resource:///org/gnome/shell/extensions/extension.js';
-import { PRESET_COLORS } from '../shared/colorUtils.js';
+import { PRESET_COLORS, RETRO_THEME, THEME_KEYS } from '../shared/colorUtils.js';
 
 export const RelojLCDIndicator = GObject.registerClass(
 { GTypeName: 'RelojLCDIndicator' },
@@ -63,22 +63,22 @@ class RelojLCDIndicator extends PanelMenu.Button {
     }
 
     _buildQuickColorMenu() {
-        const colorEntries = [
-            ['green', _('Neon Green')],
-            ['amber', _('Vintage Amber')],
-            ['gray', _('Retro LCD')],
-            ['ruby', _('Red Ruby')],
-            ['sapphire', _('Blue Sapphire')],
-            ['white', _('White LED')],
-            ['violet', _('Violet Purple')],
-            ['gold', _('Gold')],
-            ['teal', _('VFD Teal')],
-            ['orange', _('Nixie Orange')]
-        ];
+        const colorLabels = {
+            green: _('Neon Green'),
+            amber: _('Vintage Amber'),
+            gray: _('Retro LCD'),
+            ruby: _('Red Ruby'),
+            sapphire: _('Blue Sapphire'),
+            white: _('White LED'),
+            violet: _('Violet Purple'),
+            gold: _('Gold'),
+            teal: _('VFD Teal'),
+            orange: _('Nixie Orange')
+        };
 
-        for (const [key, label] of colorEntries) {
-            const colorMenuItem = new PopupMenu.PopupMenuItem(label);
-            const swatchHex = key === 'gray' ? '#6a8a5a' : (PRESET_COLORS[key] || '#ffffff');
+        for (const key of THEME_KEYS) {
+            const colorMenuItem = new PopupMenu.PopupMenuItem(colorLabels[key]);
+            const swatchHex = key === 'gray' ? RETRO_THEME.border : PRESET_COLORS[key];
             colorMenuItem.label.set_style(`color: ${swatchHex}; font-weight: bold;`);
             colorMenuItem.connect('activate', () => {
                 this._settings.set_string('clock-color', key);

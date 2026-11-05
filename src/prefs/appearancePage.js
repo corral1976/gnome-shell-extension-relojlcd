@@ -3,11 +3,11 @@ import Gdk from 'gi://Gdk';
 import Gio from 'gi://Gio';
 import Gtk from 'gi://Gtk';
 import { gettext as _ } from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
-import { isValidHex } from '../shared/colorUtils.js';
+import { isValidHex, THEME_KEYS } from '../shared/colorUtils.js';
 import { createPreview } from './previewArea.js';
 import { addSwitchRow, bindChoiceRow, escapeMarkup } from './prefsHelpers.js';
 
-const COLOR_KEYS = ['green', 'amber', 'gray', 'ruby', 'sapphire', 'white', 'violet', 'gold', 'teal', 'orange', 'custom'];
+const COLOR_KEYS = [...THEME_KEYS, 'custom'];
 const FONT_STYLE_KEYS = ['regular', 'italic', 'bold', 'italic-bold'];
 
 export function buildAppearancePage(settings, links) {
@@ -25,15 +25,24 @@ export function buildAppearancePage(settings, links) {
     });
     page.add(colorGroup);
 
+    const colorLabels = {
+        green: _('Neon Green'),
+        amber: _('Vintage Amber'),
+        gray: _('Retro LCD'),
+        ruby: _('Red Ruby'),
+        sapphire: _('Blue Sapphire'),
+        white: _('White LED'),
+        violet: _('Violet Purple'),
+        gold: _('Gold'),
+        teal: _('VFD Teal'),
+        orange: _('Nixie Orange'),
+        custom: _('Custom Color')
+    };
+
     const colorRow = new Adw.ComboRow({
         title: _('Color Theme'),
         subtitle: _('Choose your preferred LCD color style'),
-        model: new Gtk.StringList({
-        strings: [
-            _('Neon Green'), _('Vintage Amber'), _('Retro LCD'), _('Red Ruby'), _('Blue Sapphire'), _('White LED'),
-            _('Violet Purple'), _('Gold'), _('VFD Teal'), _('Nixie Orange'), _('Custom Color')
-        ]
-    })
+        model: new Gtk.StringList({ strings: COLOR_KEYS.map(key => colorLabels[key]) })
     });
     bindChoiceRow(settings, links, colorRow, 'clock-color', COLOR_KEYS);
     colorGroup.add(colorRow);

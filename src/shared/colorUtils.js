@@ -12,6 +12,14 @@ export const PRESET_COLORS = {
     orange: '#ff7518'
 };
 
+export const THEME_KEYS = ['green', 'amber', 'gray', 'ruby', 'sapphire', 'white', 'violet', 'gold', 'teal', 'orange'];
+
+export const RETRO_THEME = {
+    main: '#000000',
+    bg: 'rgba(120, 150, 100, 0.95)',
+    border: '#6a8a5a'
+};
+
 export function isValidHex(hex) {
     return typeof hex === 'string' && HEX_RE.test(hex);
 }

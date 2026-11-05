@@ -52,7 +52,7 @@ export function buildGeneralPage(settings, links) {
         _('Display seconds in the time display'));
     addSwitchRow(settings, behaviorGroup, 'show-date',
         _('Show Date'),
-        _('Display current date below the time'));
+        _('Display the date next to the time (below it in widget mode)'));
     addSwitchRow(settings, behaviorGroup, 'show-date-tooltip',
         _('Show Date on Hover'),
         _('Show the full date in a small tooltip when the pointer rests over the clock'));

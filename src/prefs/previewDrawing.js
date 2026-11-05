@@ -2,7 +2,7 @@ import Gdk from 'gi://Gdk';
 import GdkPixbuf from 'gi://GdkPixbuf';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
-import { hexToRgba, isValidHex, PRESET_COLORS } from '../shared/colorUtils.js';
+import { hexToRgba, isValidHex, PRESET_COLORS, RETRO_THEME } from '../shared/colorUtils.js';
 import { calculateRetroShadowOffset, RETRO_SHADOW_RGBA } from '../shared/renderMath.js';
 import {
     buildGlyphSvgMarkup,
@@ -12,10 +12,6 @@ import {
 } from '../shared/glyphAssets.js';
 
 const glyphTextEncoder = new TextEncoder();
-
-const RETRO_MAIN_COLOR = '#000000';
-const RETRO_BORDER_COLOR = '#6a8a5a';
-const RETRO_BG_COLOR = 'rgba(120, 150, 100, 0.95)';
 
 function hexTo01(hex) {
     const clean = hex.replace('#', '');
@@ -33,9 +29,8 @@ function rgbaStringTo01(str) {
 }
 
 export function getPreviewColors(colorType, customHex) {
-    if (colorType === 'gray') {
-        return { main: RETRO_MAIN_COLOR, border: RETRO_BORDER_COLOR, bg: RETRO_BG_COLOR };
-    }
+    if (colorType === 'gray') return RETRO_THEME;
+
     const base = colorType === 'custom'
         ? (isValidHex(customHex) ? customHex : '#00ff00')
         : (PRESET_COLORS[colorType] || PRESET_COLORS.green);

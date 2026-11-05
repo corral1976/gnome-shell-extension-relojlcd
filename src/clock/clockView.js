@@ -143,7 +143,7 @@ export class ClockView {
     }
 
     #updateAlarmDot() {
-        this.#display.updateAlarmDot(this.#alarmManager.hasEnabledAlarm);
+        this.#display.updateAlarmDot(this.#alarmManager.hasPendingAlarm);
     }
 
     #updateStyle() {
@@ -212,6 +212,7 @@ export class ClockView {
         this.#display.setTime(timeStr, fontSize);
         this.#host.actor.accessible_name = formatAccessibleTime(now, layout.is24h, this.#extension.metadata.name);
         this.#alarmManager.checkAlarms(now);
+        this.#updateAlarmDot();
     }
 
     #getRasterScale() {

@@ -211,9 +211,9 @@ export class ClockDisplay {
         this.#scanlinesActor.visible = this.#settings.get_boolean('crt-scanlines');
     }
 
-    updateAlarmDot(hasEnabledAlarm) {
-        this.#alarmDotWrapper.visible = hasEnabledAlarm || this.#settings.get_boolean('ghost-segments');
-        this.#alarmDot.opacity = hasEnabledAlarm ? 255 : GHOST_SEGMENTS_OPACITY;
+    updateAlarmDot(hasPendingAlarm) {
+        this.#alarmDotWrapper.visible = hasPendingAlarm || this.#settings.get_boolean('ghost-segments');
+        this.#alarmDot.opacity = hasPendingAlarm ? 255 : GHOST_SEGMENTS_OPACITY;
     }
 
     updateCentering() {

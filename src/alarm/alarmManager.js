@@ -5,6 +5,7 @@ import { gettext as _ } from 'resource:///org/gnome/shell/extensions/extension.j
 import { AlarmDialog } from '../ui/alarmDialog.js';
 import { notifySystem } from '../ui/systemNotification.js';
 import { ALARM_SOUND_DURATION_MS } from '../shared/alarmSound.js';
+import { isAlarmPending } from '../shared/alarmState.js';
 
 const ALARM_AUTO_STOP_MS = 60000;
 const SECONDS_PER_MINUTE = 60;
@@ -50,8 +51,9 @@ export class AlarmManager {
         return this.#isRinging;
     }
 
-    get hasEnabledAlarm() {
-        return this.#alarms.some(alarm => alarm.enabled);
+    get hasPendingAlarm() {
+        const nowMs = Date.now();
+        return this.#alarms.some(alarm => isAlarmPending(alarm, nowMs));
     }
 
     getCarryover() {
@@ -134,6 +136,13 @@ export class AlarmManager {
             this.#lastAlarmStamps.set(alarm.id, stamp);
 
             if (hasDate) this.#disableOneTimeAlarm(alarm);
+
+            const lateBySeconds = now.to_unix() - target.to_unix();
+            if (lateBySeconds >= SECONDS_PER_MINUTE) {
+                if (lateBySeconds <= MISSED_ALARM_WINDOW_SECONDS)
+                    this.#notifyMissedAlarm(alarm, target);
+                continue;
+            }
 
             if (this.#isRinging) {
                 if (!this.#pendingAlarms.some(pending => pending.id === alarm.id))

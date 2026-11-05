@@ -5,11 +5,11 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: Retro LCD 7-Segment Clock 87\n"
+"Project-Id-Version: Retro LCD 7-Segment Clock 88\n"
 "Report-Msgid-Bugs-To: https://gitlab.com/corral1976/gnome-shell-extension-"
 "relojlcd/-/issues\n"
-"POT-Creation-Date: 2026-11-02 21:23+0000\n"
-"PO-Revision-Date: 2026-11-01 03:49+0000\n"
+"POT-Creation-Date: 2026-11-03 23:41+0000\n"
+"PO-Revision-Date: 2026-11-03 23:41+0000\n"
 "Last-Translator: Carlos Corral\n"
 "Language-Team: French\n"
 "Language: fr\n"
@@ -460,8 +460,8 @@ msgid "Show Date"
 msgstr "Afficher la date"
 
 #: src/prefs/generalPage.js
-msgid "Display current date below the time"
-msgstr "Afficher la date actuelle sous l’heure"
+msgid "Display the date next to the time (below it in widget mode)"
+msgstr "Afficher la date à côté de l’heure (en dessous en mode widget)"
 
 #: src/prefs/generalPage.js
 msgid "Show Date on Hover"

@@ -1,15 +1,11 @@
-import { buildCustomTheme, buildTheme, PRESET_COLORS } from '../shared/colorUtils.js';
+import { buildCustomTheme, buildTheme, PRESET_COLORS, RETRO_THEME } from '../shared/colorUtils.js';
 import { calculateRetroShadowOffset } from '../shared/renderMath.js';
 import { buildDateDivider, buildSeparator } from '../shared/timeLayout.js';
 
 export const COMPACT_HORIZONTAL_PADDING = 3;
 
 const THEME_MAP = {
-    gray: {
-        main: '#000000',
-        bg: 'rgba(120, 150, 100, 0.95)',
-        border: '#6a8a5a'
-    },
+    gray: RETRO_THEME,
     ...Object.fromEntries(
         Object.entries(PRESET_COLORS).map(([key, hex]) => [key, buildTheme(hex)])
     )

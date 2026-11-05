@@ -85,7 +85,7 @@
     <key name="show-date" type="b">
       <default>false</default>
       <summary>Show date</summary>
-      <description>Display current date below the time</description>
+      <description>Display the date next to the time, or below it in desktop widget mode</description>
     </key>
     <key name="date-format" type="s">
       <choices>
