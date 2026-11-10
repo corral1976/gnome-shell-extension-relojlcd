@@ -141,6 +141,8 @@ export class ClockHost {
     }
 
     #beginDrag(actor, event) {
+        this.#endDrag();
+
         const [x, y] = event.get_coords();
         const [actorX, actorY] = actor.get_transformed_position();
         const grabX = x - actorX;

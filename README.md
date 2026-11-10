@@ -14,7 +14,7 @@ Minimalist, lightweight design, true to the classic 7-segment LCD look from the 
 
 The simplest way is to install it from the official GNOME Extensions site — it updates itself and integrates a bit better that way:
 
-[Get it on GNOME Extensions](https://extensions.gnome.org/extension/9082/reloj-retro-lcd/)
+You can install this extension by visiting [Get it on GNOME Extensions](https://extensions.gnome.org/extension/9082/reloj-retro-lcd/) for this extension.
 
 Repository mirrors: [GitLab](https://gitlab.com/corral1976/gnome-shell-extension-relojlcd) · [GitHub](https://github.com/corral1976/gnome-shell-extension-relojlcd)
 
@@ -50,7 +50,7 @@ Repository mirrors: [GitLab](https://gitlab.com/corral1976/gnome-shell-extension
 - Date on hover: rest the pointer over the clock and a small tooltip shows today's full date, in your language and in the clock's current colors (can be turned off in Preferences)
 - Quick color menu: click the panel indicator for instant theme switching without opening full Preferences
 - Condensed mode: closes the gaps around the separators and shortens the date divider, for a narrower clock
-- Missed-alarm notice: GNOME turns extensions off while the screen is locked, so if an alarm comes due during a lock you get a notification when you unlock (alarms up to 30 minutes old; snoozes that were waiting are kept). The same notice appears if the clock jumps more than a minute past an alarm's time, for example after waking from suspend
+- Missed-alarm notice: GNOME turns extensions off while the screen is locked, so if an alarm comes due during a lock you get a notification when you unlock (alarms up to 30 minutes old; snoozes that were waiting are kept). The same notice appears if the clock jumps more than a minute past an alarm's time, or past the end of a snooze, for example after waking from suspend
 - Update notice: a one-time notification (with the extension's icon) lets you know when it has updated to a new version
 
 ---
@@ -145,7 +145,7 @@ If you did both and it still looks wrong, please open an issue with your GNOME S
 
 ## Requirements
 
-- GNOME Shell 45, 46, 47, 48, 49 or 50
+- GNOME Shell 45, 46, 47, 48, 49, 50 or 51
 - The `gnome-extensions-app` (comes preinstalled on most distros)
 - `gettext` (only if you compile the optional translations by hand)
 

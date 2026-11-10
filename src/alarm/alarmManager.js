@@ -114,6 +114,8 @@ export class AlarmManager {
 
         if (!this.#alarms.length) return;
 
+        this.#checkSnoozes();
+
         for (const alarm of this.#alarms) {
             if (!alarm.enabled) continue;
 
@@ -307,23 +309,53 @@ export class AlarmManager {
     }
 
     #startSnoozeTimer(alarmId, delaySeconds) {
-        const existingTimeoutId = this.#snoozeTimeoutIds.get(alarmId);
-        if (existingTimeoutId) GLib.Source.remove(existingTimeoutId);
+        this.#clearSnooze(alarmId);
 
         this.#snoozeDueTimes.set(alarmId, GLib.get_real_time() + delaySeconds * MICROSECONDS_PER_SECOND);
         const timeoutId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, delaySeconds, () => {
             this.#snoozeTimeoutIds.delete(alarmId);
             this.#snoozeDueTimes.delete(alarmId);
-            const currentAlarm = this.#alarms.find(candidate => candidate.id === alarmId);
-            if (currentAlarm && this.#canRing(currentAlarm)) {
-                if (!this.#isRinging)
-                    this.#triggerAlarm(currentAlarm);
-                else if (!this.#pendingAlarms.some(pending => pending.id === currentAlarm.id))
-                    this.#pendingAlarms.push(currentAlarm);
-            }
+            this.#ringSnoozedAlarm(alarmId);
             return GLib.SOURCE_REMOVE;
         });
         this.#snoozeTimeoutIds.set(alarmId, timeoutId);
+    }
+
+    #clearSnooze(alarmId) {
+        const timeoutId = this.#snoozeTimeoutIds.get(alarmId);
+        if (timeoutId) GLib.Source.remove(timeoutId);
+        this.#snoozeTimeoutIds.delete(alarmId);
+        this.#snoozeDueTimes.delete(alarmId);
+    }
+
+    #checkSnoozes() {
+        const nowMicroseconds = GLib.get_real_time();
+
+        for (const [alarmId, dueAt] of [...this.#snoozeDueTimes]) {
+            if (dueAt > nowMicroseconds) continue;
+
+            this.#clearSnooze(alarmId);
+
+            const alarm = this.#alarms.find(candidate => candidate.id === alarmId);
+            if (!alarm || !this.#canRing(alarm)) continue;
+
+            const lateBySeconds = Math.floor((nowMicroseconds - dueAt) / MICROSECONDS_PER_SECOND);
+            if (lateBySeconds < SECONDS_PER_MINUTE) {
+                this.#ringSnoozedAlarm(alarmId);
+            } else if (lateBySeconds <= MISSED_ALARM_WINDOW_SECONDS) {
+                this.#notifyMissedAlarm(alarm, GLib.DateTime.new_from_unix_local(Math.floor(dueAt / MICROSECONDS_PER_SECOND)));
+            }
+        }
+    }
+
+    #ringSnoozedAlarm(alarmId) {
+        const alarm = this.#alarms.find(candidate => candidate.id === alarmId);
+        if (!alarm || !this.#canRing(alarm)) return;
+
+        if (!this.#isRinging)
+            this.#triggerAlarm(alarm);
+        else if (!this.#pendingAlarms.some(pending => pending.id === alarm.id))
+            this.#pendingAlarms.push(alarm);
     }
 
     #haltRinging() {
