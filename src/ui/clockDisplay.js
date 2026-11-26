@@ -10,6 +10,7 @@ import {
     resolveGlyphStyleOptions
 } from '../shared/glyphAssets.js';
 import { getPlaceholderText, getTheme, readLayoutFlags, readStyleConfig } from '../clock/clockConfig.js';
+import { getBoxOrientationProps } from './boxOrientation.js';
 import { SevenSegmentRow } from './sevenSegmentRow.js';
 
 const GHOST_SEGMENTS_OPACITY = 30;
@@ -116,7 +117,7 @@ export class ClockDisplay {
         this.#alarmDotWrapper.add_child(this.#alarmDot);
 
         this.#container = new St.BoxLayout({
-            orientation: Clutter.Orientation.HORIZONTAL,
+            ...getBoxOrientationProps(false),
             clip_to_allocation: false,
             x_expand: true,
             y_expand: true
@@ -267,7 +268,7 @@ export class ClockDisplay {
     }
 
     #applyContainerOrientation(config) {
-        this.#container.orientation = config.compact ? Clutter.Orientation.VERTICAL : Clutter.Orientation.HORIZONTAL;
+        Object.assign(this.#container, getBoxOrientationProps(config.compact));
         this.#alarmDotWrapper.x_align = config.compact ? Clutter.ActorAlign.CENTER : Clutter.ActorAlign.START;
     }
 
